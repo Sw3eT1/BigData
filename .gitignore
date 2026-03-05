@@ -1,3 +1,4 @@
 .env
 *.csv
 venv/
+*lustrous*.json
