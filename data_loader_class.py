@@ -30,10 +30,15 @@ class DataLoader:
         csv_files = folder_path.glob("*.csv")
 
         count = 0
-        for file_path in csv_files:
-            df = pd.read_csv(file_path)
-            self.loaded_data[file_path.stem] = df
-            count += 1
+        try:
+            for file_path in csv_files:
+                df = pd.read_csv(file_path, low_memory=False)
+                self.loaded_data[file_path.stem] = df
+                count += 1
+        except Exception as err:
+            print(err)
+            count = 0
+            return count
         return count
 
 

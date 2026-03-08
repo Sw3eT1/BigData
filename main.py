@@ -16,13 +16,13 @@ def load_data_with_data_loader_using_query():
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM `bigquery-public-data.noaa_gsod.gsod2020`
-    LIMIT 10
+    LIMIT 1000
     """, 'basic_query')
 
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM bigquery-public-data.noaa_gsod.stations
-    LIMIT 10
+    LIMIT 1000
     """, 'stations_query')
 
     data_loader.save_all_df_to_csv()
@@ -31,6 +31,7 @@ def load_data_with_data_loader_using_query():
 data_manipulator = DataFrameManipulator()
 
 loaded = data_loader.load_dfs_from_csv_to_class()
+print(loaded)
 
 if loaded == 0:
     load_data_with_data_loader_using_query()
@@ -43,15 +44,32 @@ all_main_data = data_loader.get_df_from_class('basic_query')
 
 station_main_data = data_loader.get_df_from_class('stations_query')
 
+numeric_columns_for_main = all_main_data.columns[5:]
+numerirc_columns_for_stations = station_main_data.columns[6:8]
+
+data_manipulator.clear_data_frame(
+    all_main_data,
+    numeric_columns= numeric_columns_for_main
+)
+data_manipulator.clear_data_frame(
+    station_main_data,
+    numeric_columns=numerirc_columns_for_stations
+)
+
 data_manipulator.change_column_names({'usaf':'stn'}, station_main_data)
 
-left_joined_station_and_main = data_manipulator.join_two_dfs(
-    station_main_data,all_main_data, 'stn'
+inner_joined_station_and_main = data_manipulator.join_two_dfs(
+    station_main_data,all_main_data, 'stn', 'inner'
 )
 
 columns_needed = ['country', 'state', 'stn','wban_x', 'name']
 
-print(data_manipulator.use_only_columns_needed(left_joined_station_and_main, columns_needed))
+basic_info_country_loc = data_manipulator.use_only_columns_needed(inner_joined_station_and_main, columns_needed)
+
+print(basic_info_country_loc)
+
+data_loader.save_df_to_csv(basic_info_country_loc, 'data/basic_info_country_loc.csv')
+
 
 # 4.2. Chcemy wygenerować podstawowe zestawienia dotyczące warunków
 # pogodowych na świecie (np. temperatura, opady, wiatr)
@@ -82,3 +100,35 @@ daily_weather_report = (
     .reset_index()
 )
 print(daily_weather_report.head())
+
+data_loader.save_df_to_csv(daily_weather_report, 'data/daily_weather_report.csv')
+
+
+# 4.3. Chcemy przygotować dane umożliwiające analizę zmian warunków pogodowych w czasie
+# dla wybranych lokalizacji i zmiennych pogodowych.
+
+# Wybrane kraje do analizy
+selected_countries = ['NO', 'SV', 'AF']
+
+# Wybór potrzebnych kolumn
+time_analysis_columns = [
+    'country',
+    'name',
+    'stn',
+    'date',
+    'temp',
+    'max',
+    'min',
+    'wdsp',
+    'prcp',
+]
+
+time_analysis_data = data_manipulator.use_only_columns_needed(inner_joined_station_and_main, time_analysis_columns)
+
+# # Sortowanie danych w czasie
+# time_analysis_data = time_analysis_data.sort_values(by=['country', 'stn', 'date'])
+
+# Zapis do CSV
+data_loader.save_df_to_csv(time_analysis_data, 'data/weather_time_analysis.csv')
+
+print(time_analysis_data.head())

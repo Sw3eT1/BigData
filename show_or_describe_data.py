@@ -41,3 +41,69 @@ class DataFrameManipulator:
         except Exception as err:
             print(err)
         return None
+
+    @staticmethod
+    def use_only_columns_needed(df, columns):
+        try:
+            return df[columns]
+        except Exception as err:
+            print(err)
+        return None
+
+    @staticmethod
+    def clear_data_frame(df, numeric_columns=None):
+        """
+        Czyści dataframe:
+        - zamienia typowe placeholdery NOAA na pd.NA
+        - czyści spacje w stringach
+        - konwertuje wybrane kolumny na typ numeryczny
+        """
+
+        # typowe placeholdery braków danych
+        missing_values = {
+            9999.9: pd.NA,
+            999.9: pd.NA,
+            99.99: pd.NA,
+            9999: pd.NA,
+            999: pd.NA,
+            99: pd.NA,
+            '9999.9': pd.NA,
+            '999.9': pd.NA,
+            '99.99': pd.NA,
+            '9999': pd.NA,
+            '999': pd.NA,
+            '99': pd.NA,
+            '': pd.NA,
+            ' ': pd.NA,
+            'NA': pd.NA,
+            'NaN': pd.NA,
+            'nan': pd.NA,
+            'NULL': pd.NA,
+            'null': pd.NA,
+            None: pd.NA
+        }
+
+        try:
+            # jeśli nie podano kolumn, próbujemy czyścić wszystkie
+            if numeric_columns is None:
+                numeric_columns = df.columns.tolist()
+
+            for col in numeric_columns:
+                if col not in df.columns:
+                    continue
+
+                # jeśli kolumna jest tekstowa, usuwamy spacje
+                if df[col].dtype == 'object':
+                    df[col] = df[col].astype(str).str.strip()
+
+                # zamiana placeholderów na NA
+                df[col] = df[col].replace(missing_values)
+
+                # próba konwersji na numeric
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            return True
+
+        except Exception as err:
+            print(err)
+            return False
