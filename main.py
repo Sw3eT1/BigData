@@ -17,20 +17,15 @@ def load_data_with_data_loader_using_query():
     SELECT *
     FROM `bigquery-public-data.noaa_gsod.gsod2020`
     LIMIT 10
-    """)
+    """, 'basic_query')
 
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM bigquery-public-data.noaa_gsod.stations
     LIMIT 10
-    """)
+    """, 'stations_query')
 
-    query_names = [
-        'basic_query',
-        'stations_query'
-    ]
-
-    data_loader.save_all_df_to_csv_with_names(query_names)
+    data_loader.save_all_df_to_csv()
 
 
 data_manipulator = DataFrameManipulator()
@@ -62,4 +57,28 @@ print(data_manipulator.use_only_columns_needed(left_joined_station_and_main, col
 # pogodowych na świecie (np. temperatura, opady, wiatr)
 # w ujęciu dziennym.
 
-col
+mapping_columns_for_main = {
+        'da': 'Day',
+        'temp':'Temperature',
+        'slp':'Sea Level Pressure',
+        'wdsp':'Wind Speed',
+        'prcp':'Precipitation',
+
+     }
+data_manipulator.change_column_names(mapping_columns_for_main, all_main_data)
+columns_needed = ['stn', 'date', 'Temperature', 'max', 'min', 'Wind Speed', 'Precipitation']
+
+daily_weather_summary = data_manipulator.use_only_columns_needed(all_main_data, columns_needed)
+daily_weather_report = (
+    daily_weather_summary
+    .groupby('date')
+    .agg({
+        'Temperature': 'mean',
+        'max': 'max',
+        'min': 'min',
+        'Wind Speed': 'mean',
+        'Precipitation': 'sum'
+    })
+    .reset_index()
+)
+print(daily_weather_report.head())
