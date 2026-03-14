@@ -22,12 +22,12 @@ class DataLoader:
     def get_df_from_class(self, key):
         return self.loaded_data[key]
 
-    def load_dfs_from_csv_to_class(self, folder="data"):
+    def load_dfs_from_csv_to_class(self, folder="data/query"):
 
         folder_path = Path(folder)
         folder_path.mkdir(exist_ok=True)
 
-        csv_files = folder_path.glob("*query.csv")
+        csv_files = folder_path.glob("*.csv")
 
         count = 0
         try:
@@ -42,17 +42,15 @@ class DataLoader:
         return count
 
 
-    @staticmethod
-    def get_df_from_csv(file_name):
+    def get_df_from_csv(self,file_name):
         df = pd.read_csv(file_name)
         return df
 
-    @staticmethod
-    def save_df_to_csv(df, file_name):
+    def save_df_to_csv(self, df, file_name):
         df.to_csv(file_name, index=False)
         return True
 
-    def save_all_df_to_csv(self, folder="data"):
+    def save_all_df_to_csv(self, folder="data/query"):
         folder_path = Path(folder)
         folder_path.mkdir(exist_ok=True)
 
