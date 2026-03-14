@@ -27,7 +27,7 @@ class DataLoader:
         folder_path = Path(folder)
         folder_path.mkdir(exist_ok=True)
 
-        csv_files = folder_path.glob("*.csv")
+        csv_files = folder_path.glob("*query.csv")
 
         count = 0
         try:

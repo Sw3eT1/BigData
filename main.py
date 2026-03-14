@@ -1,4 +1,5 @@
 import os
+import pandas as pd
 
 from dotenv import load_dotenv
 
@@ -17,7 +18,13 @@ def load_data_with_data_loader_using_query():
     SELECT *
     FROM `bigquery-public-data.noaa_gsod.gsod2020`
     LIMIT 1000
-    """, 'basic_query')
+    """, 'basic_2020_query')
+
+    data_loader.make_a_query_and_save_to_class("""
+        SELECT *
+        FROM `bigquery-public-data.noaa_gsod.gsod2021`
+        LIMIT 1000
+        """, 'basic_2021_query')
 
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
@@ -40,12 +47,15 @@ if loaded == 0:
 # 4.1. Chcemy posiadać podstawowe informacje o lokalizacjach pomiarów pogodowych (stacje) oraz krajach,
 # tak aby dane były zrozumiałe dla człowieka i możliwe do dalszego przetwarzania
 
-all_main_data = data_loader.get_df_from_class('basic_query')
+main_data_2020 = data_loader.get_df_from_class('basic_2020_query')
+main_data_2021 = data_loader.get_df_from_class('basic_2021_query')
+
+all_main_data = pd.concat([main_data_2021, main_data_2020], ignore_index=True)
 
 station_main_data = data_loader.get_df_from_class('stations_query')
 
 numeric_columns_for_main = all_main_data.columns[5:]
-numerirc_columns_for_stations = station_main_data.columns[6:8]
+numeric_columns_for_stations = station_main_data.columns[6:8]
 
 data_manipulator.clear_data_frame(
     all_main_data,
@@ -53,7 +63,7 @@ data_manipulator.clear_data_frame(
 )
 data_manipulator.clear_data_frame(
     station_main_data,
-    numeric_columns=numerirc_columns_for_stations
+    numeric_columns=numeric_columns_for_stations
 )
 
 data_manipulator.change_column_names({'usaf':'stn'}, station_main_data)
