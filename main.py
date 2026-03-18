@@ -203,7 +203,7 @@ data_loader.save_df_to_csv(
 
 # Wybrane kraje do analizy
 selected_countries = [
-    'NO', 'SV', 'AF'
+    'NO', 'ES', 'AF'
 ]
 
 # Wybór potrzebnych kolumn
@@ -248,3 +248,80 @@ seasonality_data = data_manipulator.use_only_columns_needed(
 data_loader.save_df_to_csv(
     seasonality_data,
     'data/report/weather_seasonality_data.csv')
+
+
+print("Merging weather data with crops...")
+
+# 6.1 Ładujemy czysty plik bez flag
+
+crop_data = data_loader.get_df_from_csv('data/Production_Crops_Livestock_E_All_Data_NOFLAG.csv')
+
+# 6.2 Bierzemy tylko to co nam potrzebne
+columns_needed_crop = ['Area', 'Item', 'Element', 'Unit', 'Y2020', 'Y2021']
+crop_data = data_manipulator.use_only_columns_needed(crop_data, columns_needed_crop)
+
+# Wywalamy inne metryki, zostawiamy samą produkcję
+crop_data = crop_data[crop_data['Element'] == 'Production']
+
+# 6.3 Przerabiamy dane z szerokich na długie
+crop_data_melted = crop_data.melt(
+    id_vars=['Area', 'Item', 'Element', 'Unit'],
+    value_vars=['Y2020', 'Y2021'],
+    var_name='Year',
+    value_name='Value'
+)
+
+# 6.4 Ogarniamy kolumnę Year żeby pasowała do tej z pogody
+crop_data_melted['Year'] = crop_data_melted['Year'].str.replace('Y', '')
+crop_data_melted['Year'] = pd.to_numeric(crop_data_melted['Year'], errors='coerce')
+
+# Podmieniamy nazwy kolumn, żeby ładnie się złączyły z naszymi z NOAA
+data_manipulator.change_column_names(
+    {
+        'Area': 'country_name',
+        'Item': 'crop_type',
+        'Year': 'year',
+        'Value': 'production_value'
+    },
+    crop_data_melted
+)
+
+# 6.5 Zwijamy dane pogodowe z dniówek na roczne, bierzemy zbiór z 5 punktu
+weather_yearly = inner_joined_station_and_main.copy()
+weather_yearly['year'] = pd.to_numeric(weather_yearly['year'], errors='coerce')
+
+weather_yearly_agg = weather_yearly.groupby(['country', 'year']).agg(
+    avg_yearly_temp=('temp', 'mean'),
+    total_yearly_prcp=('prcp', 'sum'),
+    avg_yearly_wdsp=('wdsp', 'mean')
+).reset_index()
+
+# 6.6 Tłumaczenie skrótów krajów z pogody na pełne nazwy z bazy plonów
+country_mapping = {
+    'NO': 'Norway',
+    'ES': 'El Salvador',
+    'AF': 'Afghanistan'
+}
+
+weather_yearly_agg['country_name'] = weather_yearly_agg['country'].map(country_mapping)
+
+# Wywalamy te wpisy z pogody, dla których nie daliśmy tłumaczenia w słowniku wyżej
+weather_yearly_agg.dropna(subset=['country_name'], inplace=True)
+
+# 7. Zlepiamy oba zbiory
+final_combined_data = data_manipulator.join_two_dfs(
+    weather_yearly_agg,
+    crop_data_melted,
+    join_columns=['country_name', 'year'],
+    type_of_join='inner'
+)
+
+# 8. Zapisujemy końcowy raport i fajrant
+if final_combined_data is not None:
+    data_loader.save_df_to_csv(
+        final_combined_data,
+        'data/report/weather_and_crop_production_final.csv'
+    )
+    print("Stage 6 completed. Results can be found in 'data/report/weather_and_crop_production_final.csv'. ")
+else:
+    print("Error with merging data")
