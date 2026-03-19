@@ -17,19 +17,16 @@ def load_data_with_data_loader_using_query():
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM `bigquery-public-data.noaa_gsod.gsod2020`
-    LIMIT 1000
     """, 'basic_2020_query')
 
     data_loader.make_a_query_and_save_to_class("""
         SELECT *
         FROM `bigquery-public-data.noaa_gsod.gsod2021`
-        LIMIT 1000
         """, 'basic_2021_query')
 
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM bigquery-public-data.noaa_gsod.stations
-    LIMIT 1000
     """, 'stations_query')
 
     data_loader.save_all_df_to_csv()
@@ -192,8 +189,22 @@ extreme_weather_data = data_manipulator.use_only_columns_needed(
     extreme_weather_columns
 )
 
+# Definicja progów ekstremalnych
+extreme_filtered = extreme_weather_data[
+    (
+        (extreme_weather_data['max'] > 100) |   # bardzo wysoka temp
+        (extreme_weather_data['min'] < 0)   |   # bardzo niska temp
+        (extreme_weather_data['prcp'] > 2.0) |  # ekstremalne opady
+        (extreme_weather_data['wdsp'] > 25) |   # silny wiatr
+        (extreme_weather_data['gust'] > 40) |   # bardzo silne porywy
+        (extreme_weather_data['tornado_funnel_cloud'] == 1) |
+        (extreme_weather_data['hail'] == 1) |
+        (extreme_weather_data['thunder'] == 1)
+    )
+]
+
 data_loader.save_df_to_csv(
-    extreme_weather_data,
+    extreme_filtered,
     'data/report/extreme_weather_data.csv'
 )
 
