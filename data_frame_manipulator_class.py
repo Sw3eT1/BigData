@@ -81,6 +81,30 @@ class DataFrameManipulator:
             return False
         return True
 
+    def count_missing_values(self, df):
+        missing_values = [
+            9999.9, 999.9, 99.99,
+            9999, 999, 99,
+            '9999.9', '999.9', '99.99',
+            '9999', '999', '99',
+            '', ' ', 'NA', 'NaN', 'nan', 'NULL', 'null',
+            None
+        ]
+
+        df_cleaned = df.replace(missing_values, pd.NA)
+
+        missing_count = df_cleaned.isna().sum()
+
+        missing_percent = round((missing_count / len(df_cleaned)) * 100, 2)
+
+        result = pd.DataFrame({
+            'column_name': df.columns,
+            'missing_count': missing_count,
+            'missing_percent': missing_percent
+        })
+
+        return result
+
     def clean_numeric_columns(self,df, numeric_columns):
         missing_values = {
             9999.9: pd.NA,
