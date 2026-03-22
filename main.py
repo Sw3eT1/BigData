@@ -3,6 +3,8 @@ import pandas as pd
 
 from dotenv import load_dotenv
 
+import matplotlib.pyplot as plt
+
 from data_loader_class import DataLoader
 from data_frame_manipulator_class import DataFrameManipulator
 
@@ -17,16 +19,19 @@ def load_data_with_data_loader_using_query():
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM `bigquery-public-data.noaa_gsod.gsod2020`
+    LIMIT 1000
     """, 'basic_2020_query')
 
     data_loader.make_a_query_and_save_to_class("""
         SELECT *
         FROM `bigquery-public-data.noaa_gsod.gsod2021`
+        LIMIT 1000
         """, 'basic_2021_query')
 
     data_loader.make_a_query_and_save_to_class("""
     SELECT *
     FROM bigquery-public-data.noaa_gsod.stations
+    LIMIT 1000
     """, 'stations_query')
 
     data_loader.save_all_df_to_csv()
@@ -123,216 +128,132 @@ inner_joined_station_and_main = data_manipulator.join_two_dfs(
     'inner'
 )
 
-# To juz w sumie zbior pod pkt 5 bo dalsze dzialania
-# to juz jakies wycinki tych samych danych ale pod pkt 5 to
-# wlasnie bedzie calym zbiorem
 data_loader.save_df_to_csv(
     inner_joined_station_and_main,
     'data/report/inner_joined_station_and_main.csv'
 )
 
-# 4.1. Chcemy posiadać podstawowe informacje o lokalizacjach pomiarów
-# pogodowych (stacje) oraz krajach,tak aby dane były zrozumiałe dla
-# człowieka i możliwe do dalszego przetwarzania
+# ----------------------------------------------------------
 
-columns_needed = [
-    'country', 'state', 'stn', 'wban', 'name',
-    'lat', 'lon', 'elev', 'begin', 'end'
-]
+# ------------- Part 1 -------------------------------------
 
-basic_info_country_loc = data_manipulator.use_only_columns_needed(
-    inner_joined_station_and_main,
-    columns_needed
+# ===========================
+# 1. Temperature analysis
+# ===========================
+fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+
+inner_joined_station_and_main.boxplot(
+    ax=ax[0],
+    column='temp',
+    by='year'
 )
+ax[0].set_title('Average temperature by year')
+ax[0].set_ylabel('Temperature [F]')
 
-data_loader.save_df_to_csv(
-    basic_info_country_loc,
-    'data/report/basic_info_country_loc.csv'
+inner_joined_station_and_main.boxplot(
+    ax=ax[1],
+    column='max',
+    by='year'
 )
+ax[1].set_title('Maximum temperature by year')
+ax[1].set_ylabel('Temperature [F]')
 
-
-# 4.2. Chcemy wygenerować podstawowe zestawienia dotyczące warunków
-# pogodowych na świecie (np. temperatura, opady, wiatr)
-# w ujęciu dziennym.
-
-columns_needed = [
-    'country', 'name', 'stn',
-    'wban', 'date', 'temp',
-    'max', 'min', 'wdsp',
-    'prcp'
-]
-daily_weather_data = data_manipulator.use_only_columns_needed(
-    inner_joined_station_and_main,
-    columns_needed
+inner_joined_station_and_main.boxplot(
+    ax=ax[2],
+    column='min',
+    by='year'
 )
+ax[2].set_title('Minimum temperature by year')
+ax[2].set_ylabel('Temperature [F]')
 
-data_loader.save_df_to_csv(
-    daily_weather_data,
-    'data/report/daily_weather_report.csv'
+plt.suptitle('Temperature analysis')
+plt.tight_layout()
+plt.show()
+
+
+# ===========================
+# 2. Precipitation and visibility analysis
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+inner_joined_station_and_main.boxplot(
+    ax=ax[0],
+    column='prcp',
+    by='year'
 )
+ax[0].set_title('Precipitation by year')
+ax[0].set_ylabel('Precipitation [inch]')
 
-# 4.3. Chcemy poznać zjawiska ekstremalne w danych pogodowych poprzez
-# uwypuklenie skrajnych wartości (np. bardzo wysokie/niskie temperatury,
-# intensywne opady, silny wiatr).
-
-
-extreme_weather_columns = [
-    'country', 'name', 'stn', 'wban', 'date',
-    'temp', 'max', 'flag_max', 'min', 'flag_min',
-    'wdsp', 'gust', 'prcp', 'flag_prcp',
-    'fog', 'rain_drizzle', 'snow_ice_pellets',
-    'hail', 'thunder', 'tornado_funnel_cloud'
-]
-
-extreme_weather_data = data_manipulator.use_only_columns_needed(
-    inner_joined_station_and_main,
-    extreme_weather_columns
+inner_joined_station_and_main.boxplot(
+    ax=ax[1],
+    column='visib',
+    by='year'
 )
+ax[1].set_title('Visibility by year')
+ax[1].set_ylabel('Visibility [mile]')
 
-# Definicja progów ekstremalnych
-extreme_filtered = extreme_weather_data[
-    (
-        (extreme_weather_data['max'] > 100) |   # bardzo wysoka temp
-        (extreme_weather_data['min'] < 0)   |   # bardzo niska temp
-        (extreme_weather_data['prcp'] > 2.0) |  # ekstremalne opady
-        (extreme_weather_data['wdsp'] > 25) |   # silny wiatr
-        (extreme_weather_data['gust'] > 40) |   # bardzo silne porywy
-        (extreme_weather_data['tornado_funnel_cloud'] == 1) |
-        (extreme_weather_data['hail'] == 1) |
-        (extreme_weather_data['thunder'] == 1)
-    )
-]
+plt.suptitle('Precipitation and visibility analysis')
+plt.tight_layout()
+plt.show()
 
-data_loader.save_df_to_csv(
-    extreme_filtered,
-    'data/report/extreme_weather_data.csv'
+
+# ===========================
+# 3. Wind analysis
+# ===========================
+fig, ax = plt.subplots(1, 3, figsize=(18, 5))
+
+inner_joined_station_and_main.boxplot(
+    ax=ax[0],
+    column='wdsp',
+    by='year'
 )
+ax[0].set_title('Average wind speed by year')
+ax[0].set_ylabel('Wind speed [knot]')
 
-
-# 4.4. Chcemy przygotować dane umożliwiające analizę zmian warunków pogodowych w czasie
-# dla wybranych lokalizacji i zmiennych pogodowych.
-
-# Wybrane kraje do analizy
-selected_countries = [
-    'NO', 'ES', 'AF'
-]
-
-# Wybór potrzebnych kolumn
-time_analysis_columns = [
-    'country', 'name', 'stn', 'date',
-    'temp', 'max', 'min','wdsp',
-    'prcp'
-]
-
-time_analysis_data = data_manipulator.use_only_columns_needed(
-    inner_joined_station_and_main,
-    time_analysis_columns
+inner_joined_station_and_main.boxplot(
+    ax=ax[1],
+    column='gust',
+    by='year'
 )
+ax[1].set_title('Maximum wind gust by year')
+ax[1].set_ylabel('Wind speed [knot]')
 
-time_analysis_data = time_analysis_data[
-    time_analysis_data['country'].isin(selected_countries)
-]
-
-# # Sortowanie danych w czasie
-time_analysis_data = time_analysis_data.sort_values(
-    by=['country', 'stn', 'date']
+inner_joined_station_and_main.boxplot(
+    ax=ax[2],
+    column='mxpsd',
+    by='year'
 )
+ax[2].set_title('Maximum sustained wind speed by year')
+ax[2].set_ylabel('Wind speed [knot]')
 
-# Zapis do CSV
-data_loader.save_df_to_csv(
-    time_analysis_data,
-    'data/report/weather_time_analysis.csv'
+plt.suptitle('Wind analysis')
+plt.tight_layout()
+plt.show()
+
+
+# ===========================
+# 4. Pressure analysis
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+inner_joined_station_and_main.boxplot(
+    ax=ax[0],
+    column='slp',
+    by='year'
 )
+ax[0].set_title('Sea level pressure by year')
+ax[0].set_ylabel('Pressure [kPa]')
 
-#4.5 dane do analizy sezonowosci
-
-seasonality_columns = [
-    'country', 'name', 'stn', 'wban', 'date',
-    'year', 'mo', 'temp', 'prcp', 'wdsp'
-]
-
-seasonality_data = data_manipulator.use_only_columns_needed(
-    inner_joined_station_and_main,
-    seasonality_columns
+inner_joined_station_and_main.boxplot(
+    ax=ax[1],
+    column='stp',
+    by='year'
 )
+ax[1].set_title('Station level pressure by year')
+ax[1].set_ylabel('Pressure [kPa]')
 
-data_loader.save_df_to_csv(
-    seasonality_data,
-    'data/report/weather_seasonality_data.csv')
+plt.suptitle('Pressure analysis')
+plt.tight_layout()
+plt.show()
 
-
-print("Merging weather data with crops...")
-
-# 6.1 Ładujemy czysty plik bez flag
-
-crop_data = data_loader.get_df_from_csv('data/Production_Crops_Livestock_E_All_Data_NOFLAG.csv')
-
-# 6.2 Bierzemy tylko to co nam potrzebne
-columns_needed_crop = ['Area', 'Item', 'Element', 'Unit', 'Y2020', 'Y2021']
-crop_data = data_manipulator.use_only_columns_needed(crop_data, columns_needed_crop)
-
-# Wywalamy inne metryki, zostawiamy samą produkcję
-crop_data = crop_data[crop_data['Element'] == 'Production']
-
-# 6.3 Przerabiamy dane z szerokich na długie
-crop_data_melted = crop_data.melt(
-    id_vars=['Area', 'Item', 'Element', 'Unit'],
-    value_vars=['Y2020', 'Y2021'],
-    var_name='Year',
-    value_name='Value'
-)
-
-# 6.4 Ogarniamy kolumnę Year żeby pasowała do tej z pogody
-crop_data_melted['Year'] = crop_data_melted['Year'].str.replace('Y', '')
-crop_data_melted['Year'] = pd.to_numeric(crop_data_melted['Year'], errors='coerce')
-
-# Podmieniamy nazwy kolumn, żeby ładnie się złączyły z naszymi z NOAA
-data_manipulator.change_column_names(
-    {
-        'Area': 'country_name',
-        'Item': 'crop_type',
-        'Year': 'year',
-        'Value': 'production_value'
-    },
-    crop_data_melted
-)
-
-# 6.5 Zwijamy dane pogodowe z dniówek na roczne, bierzemy zbiór z 5 punktu
-weather_yearly = inner_joined_station_and_main.copy()
-weather_yearly['year'] = pd.to_numeric(weather_yearly['year'], errors='coerce')
-
-weather_yearly_agg = weather_yearly.groupby(['country', 'year']).agg(
-    avg_yearly_temp=('temp', 'mean'),
-    total_yearly_prcp=('prcp', 'sum'),
-    avg_yearly_wdsp=('wdsp', 'mean')
-).reset_index()
-
-# 6.6 Tłumaczenie skrótów krajów z pogody na pełne nazwy z bazy plonów
-country_mapping = {
-    'NO': 'Norway',
-    'ES': 'El Salvador',
-    'AF': 'Afghanistan'
-}
-
-weather_yearly_agg['country_name'] = weather_yearly_agg['country'].map(country_mapping)
-
-# Wywalamy te wpisy z pogody, dla których nie daliśmy tłumaczenia w słowniku wyżej
-weather_yearly_agg.dropna(subset=['country_name'], inplace=True)
-
-# 7. Zlepiamy oba zbiory
-final_combined_data = data_manipulator.join_two_dfs(
-    weather_yearly_agg,
-    crop_data_melted,
-    join_columns=['country_name', 'year'],
-    type_of_join='inner'
-)
-
-# 8. Zapisujemy końcowy raport i fajrant
-if final_combined_data is not None:
-    data_loader.save_df_to_csv(
-        final_combined_data,
-        'data/report/weather_and_crop_production_final.csv'
-    )
-    print("Stage 6 completed. Results can be found in 'data/report/weather_and_crop_production_final.csv'. ")
-else:
-    print("Error with merging data")
+# ----------------------------------------------------------
