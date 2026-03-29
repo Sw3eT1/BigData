@@ -59,7 +59,7 @@ data_manipulator.clear_data_frame(
     None,
     None,
     None,
-    ['stn', 'wban']
+    ['stn', 'wban', 'date']
 )
 
 station_main_data = data_loader.get_df_from_class('stations_query')
@@ -268,7 +268,7 @@ data_manipulator.clear_data_frame(
 )
 
 text_columns_for_station = [
-    'usaf', 'wban', 'name',
+    'stn', 'wban', 'name',
     'country', 'state','call'
 ]
 
@@ -372,3 +372,269 @@ data_loader.save_df_to_csv(
 )
 
 # WNIOSEK: INTEROPLACJA TO NIEZLY SZEFUNCIU
+
+inner_joined_station_and_main = linear_interpolation_tryout.copy(True)
+
+# # ----------------------------------------------------------
+#
+#
+# ------------- Part 4 -------------------------------------
+# ----------------------------------------------------------
+
+analysis_df = linear_interpolation_tryout.copy()
+
+analysis_df['date'] = pd.to_datetime(analysis_df['date'], errors='coerce')
+
+# wybór miesiąca do analizy
+selected_year = 2021
+selected_month = 7
+
+month_df = analysis_df[
+    (analysis_df['date'].dt.year == selected_year) &
+    (analysis_df['date'].dt.month == selected_month)
+].copy()
+
+# wybór 10 krajów z największą liczbą obserwacji
+top_10_countries = (
+    month_df['country']
+    .dropna()
+    .value_counts()
+    .head(10)
+    .index
+    .tolist()
+)
+
+month_df = month_df[month_df['country'].isin(top_10_countries)].copy()
+
+print("TOP 10 wybranych krajów:")
+print(top_10_countries)
+
+# ===========================
+# 4.1 średnia temperatura, opady i prędkość wiatru
+# ===========================
+part_4_1 = (
+    month_df
+    .groupby('country')[['temp', 'prcp', 'wdsp']]
+    .mean()
+    .round(2)
+    .reset_index()
+)
+
+print("\n4.1 Średnia temperatura, opady i prędkość wiatru:")
+print(part_4_1)
+
+data_loader.save_df_to_csv(
+    part_4_1,
+    'data/report/part_4_1_mean_by_country.csv'
+)
+
+# ===========================
+# 4.2 średnia zmiana temperatury i opadów
+# ===========================
+month_df = month_df.sort_values(['country', 'date'])
+
+month_df['temp_change'] = month_df.groupby('country')['temp'].diff()
+month_df['prcp_change'] = month_df.groupby('country')['prcp'].diff()
+
+part_4_2 = (
+    month_df
+    .groupby('country')[['temp_change', 'prcp_change']]
+    .mean()
+    .round(2)
+    .reset_index()
+)
+
+print("\n4.2 Średnia zmiana temperatury i opadów:")
+print(part_4_2)
+
+data_loader.save_df_to_csv(
+    part_4_2,
+    'data/report/part_4_2_mean_change_by_country.csv'
+)
+
+# ===========================
+# 4.3 mediana temperatury, opadów i prędkości wiatru
+# ===========================
+part_4_3 = (
+    month_df
+    .groupby('country')[['temp', 'prcp', 'wdsp']]
+    .median()
+    .round(2)
+    .reset_index()
+)
+
+print("\n4.3 Mediana temperatury, opadów i prędkości wiatru:")
+print(part_4_3)
+
+data_loader.save_df_to_csv(
+    part_4_3,
+    'data/report/part_4_3_median_by_country.csv'
+)
+
+# ===========================
+# 4.4 odchylenie standardowe temperatury, opadów i prędkości wiatru
+# ===========================
+part_4_4 = (
+    month_df
+    .groupby('country')[['temp', 'prcp', 'wdsp']]
+    .std()
+    .round(2)
+    .reset_index()
+)
+
+print("\n4.4 Odchylenie standardowe temperatury, opadów i prędkości wiatru:")
+print(part_4_4)
+
+data_loader.save_df_to_csv(
+    part_4_4,
+    'data/report/part_4_4_std_by_country.csv'
+)
+
+# ===========================
+# 4.5 minimalna, średnia i maksymalna temperatura, opadów i prędkości wiatru
+# ===========================
+part_4_5 = (
+    month_df
+    .groupby('country')[['temp', 'prcp', 'wdsp']]
+    .agg(['min', 'mean', 'max'])
+    .round(2)
+)
+
+part_4_5.columns = [f'{col}_{stat}' for col, stat in part_4_5.columns]
+part_4_5 = part_4_5.reset_index()
+
+print("\n4.5 Minimalna, średnia i maksymalna temperatura, opadów i prędkości wiatru:")
+print(part_4_5)
+
+data_loader.save_df_to_csv(
+    part_4_5,
+    'data/report/part_4_5_min_mean_max_by_country.csv'
+)
+
+# opcjonalnie moda, bo była wspomniana w treści
+part_4_mode = (
+    month_df
+    .groupby('country')[['temp', 'prcp', 'wdsp']]
+    .agg(lambda x: x.mode().iloc[0] if not x.mode().empty else pd.NA)
+    .reset_index()
+)
+
+print("\nDodatkowo moda temperatury, opadów i prędkości wiatru:")
+print(part_4_mode)
+
+data_loader.save_df_to_csv(
+    part_4_mode,
+    'data/report/part_4_mode_by_country.csv'
+)
+
+# ----------------------------------------------------------
+# ------------- Part 5 -------------------------------------
+# ----------------------------------------------------------
+
+normalized_df = analysis_df.copy()
+
+columns_to_normalize = [
+    'temp',   # temperatura
+    'prcp',   # opady
+    'wdsp',   # prędkość wiatru
+    'sndp',   # zmienna zastępcza "rolnicza"
+    'visib',  # dodatkowa 1
+    'slp',    # dodatkowa 2
+    'stp'     # dodatkowa 3
+]
+
+for col in columns_to_normalize:
+    col_min = normalized_df[col].min()
+    col_max = normalized_df[col].max()
+
+    if pd.notna(col_min) and pd.notna(col_max) and col_max != col_min:
+        normalized_df[f'{col}_norm'] = (
+            (normalized_df[col] - col_min) / (col_max - col_min)
+        )
+    else:
+        normalized_df[f'{col}_norm'] = 0.0
+
+data_loader.save_df_to_csv(
+    normalized_df,
+    'data/report/normalized_data.csv'
+)
+
+# ===========================
+# 5.1 temperatura
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+normalized_df.boxplot(column='temp', ax=ax[0])
+ax[0].set_title('Temperatura przed normalizacją')
+ax[0].set_ylabel('Temperature [F]')
+
+normalized_df.boxplot(column='temp_norm', ax=ax[1])
+ax[1].set_title('Temperatura po normalizacji')
+ax[1].set_ylabel('Value [0, 1]')
+
+plt.tight_layout()
+plt.show()
+
+# ===========================
+# 5.2 opady
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+normalized_df.boxplot(column='prcp', ax=ax[0])
+ax[0].set_title('Opady przed normalizacją')
+ax[0].set_ylabel('Precipitation [inch]')
+
+normalized_df.boxplot(column='prcp_norm', ax=ax[1])
+ax[1].set_title('Opady po normalizacji')
+ax[1].set_ylabel('Value [0, 1]')
+
+plt.tight_layout()
+plt.show()
+
+# ===========================
+# 5.3 prędkość wiatru
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+normalized_df.boxplot(column='wdsp', ax=ax[0])
+ax[0].set_title('Prędkość wiatru przed normalizacją')
+ax[0].set_ylabel('Wind speed [knot]')
+
+normalized_df.boxplot(column='wdsp_norm', ax=ax[1])
+ax[1].set_title('Prędkość wiatru po normalizacji')
+ax[1].set_ylabel('Value [0, 1]')
+
+plt.tight_layout()
+plt.show()
+
+# ===========================
+# 5.4 zmienna zastępcza rolnicza: sndp
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(12, 5))
+
+normalized_df.boxplot(column='sndp', ax=ax[0])
+ax[0].set_title('Pokrywa śnieżna przed normalizacją')
+ax[0].set_ylabel('Snow depth')
+
+normalized_df.boxplot(column='sndp_norm', ax=ax[1])
+ax[1].set_title('Pokrywa śnieżna po normalizacji')
+ax[1].set_ylabel('Value [0, 1]')
+
+plt.tight_layout()
+plt.show()
+
+# ===========================
+# 5.5 dodatkowe 3 zmienne
+# ===========================
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+
+normalized_df[['visib', 'slp', 'stp']].boxplot(ax=ax[0])
+ax[0].set_title('Dodatkowe zmienne przed normalizacją')
+ax[0].set_ylabel('Original scale')
+
+normalized_df[['visib_norm', 'slp_norm', 'stp_norm']].boxplot(ax=ax[1])
+ax[1].set_title('Dodatkowe zmienne po normalizacji')
+ax[1].set_ylabel('Value [0, 1]')
+
+plt.tight_layout()
+plt.show()
