@@ -1,59 +1,44 @@
+import os
 import pandas as pd
-
-from pathlib import Path
 from google.cloud import bigquery
-from google.oauth2 import service_account
+
 
 class DataLoader:
     def __init__(self, key_file_path):
-        pass
-        self.key_file_path = key_file_path
-        self.credentials = service_account.Credentials.from_service_account_file(self.key_file_path)
-        self.client = bigquery.Client(credentials=self.credentials, project=self.credentials.project_id)
-        self.loaded_data = {}
+        if key_file_path:
+            # Ustawienie zmiennej środowiskowej z kluczem do Google Cloud
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = key_file_path
 
+        # Inicjalizacja klienta BigQuery
+        self.client = bigquery.Client()
+        self.data_frames = {}
 
     def make_a_query_and_save_to_class(self, query, name):
         query_job = self.client.query(query)
-        df = query_job.result().to_dataframe()
-        self.loaded_data[name] = df
-        return True
+        self.data_frames[name] = query_job.to_dataframe()
 
-    def get_df_from_class(self, key):
-        return self.loaded_data[key]
+    def save_all_df_to_csv(self, folder='data/query/'):
+        os.makedirs(folder, exist_ok=True)
+        for name, df in self.data_frames.items():
+            df.to_csv(os.path.join(folder, f"{name}.csv"), index=False)
 
-    def load_dfs_from_csv_to_class(self, folder="data/query"):
+    def load_dfs_from_csv_to_class(self, folder='data/query/'):
+        if not os.path.exists(folder):
+            return 0
 
-        folder_path = Path(folder)
-        folder_path.mkdir(exist_ok=True)
+        files = [f for f in os.listdir(folder) if f.endswith('.csv')]
+        for file in files:
+            name = file.replace('.csv', '')
+            self.data_frames[name] = pd.read_csv(os.path.join(folder, file), low_memory=False)
 
-        csv_files = folder_path.glob("*.csv")
+        return len(files)
 
-        count = 0
-        try:
-            for file_path in csv_files:
-                df = pd.read_csv(file_path, low_memory=False)
-                self.loaded_data[file_path.stem] = df
-                count += 1
-        except Exception as err:
-            print(err)
-            count = 0
-            return count
-        return count
+    def get_df_from_class(self, name):
+        return self.data_frames.get(name)
 
+    def save_df_to_csv(self, df, path):
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        df.to_csv(path, index=False)
 
-    def get_df_from_csv(self,file_name):
-        df = pd.read_csv(file_name)
-        return df
-
-    def save_df_to_csv(self, df, file_name):
-        df.to_csv(file_name, index=False)
-        return True
-
-    def save_all_df_to_csv(self, folder="data/query"):
-        folder_path = Path(folder)
-        folder_path.mkdir(exist_ok=True)
-
-        for name, df in self.loaded_data.items():
-            df.to_csv(folder_path / f"{name}.csv", index=False)
-        return True
+    def get_df_from_csv(self, path):
+        return pd.read_csv(path, low_memory=False)

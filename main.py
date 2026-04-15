@@ -1,749 +1,269 @@
 import os
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
 
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.metrics import r2_score
 from dotenv import load_dotenv
 
-import matplotlib.pyplot as plt
-import numpy as np
-
+# Import naszych wlasnych klas z innych plikow
 from data_loader_class import DataLoader
 from data_frame_manipulator_class import DataFrameManipulator
 
+# ==========================================================
+# BOILERPLATE - LADOWANIE DANYCH
+# ==========================================================
 load_dotenv()
 KEY_FILE = os.environ.get('KEYFILEPATH')
-
 data_loader = DataLoader(KEY_FILE)
-
-
-# Do wywolania tylko jak nie ma rzeczy juz w data
-def load_data_with_data_loader_using_query():
-    data_loader.make_a_query_and_save_to_class("""
-    SELECT *
-    FROM `bigquery-public-data.noaa_gsod.gsod2020`
-    """, 'basic_2020_query')
-
-    data_loader.make_a_query_and_save_to_class("""
-        SELECT *
-        FROM `bigquery-public-data.noaa_gsod.gsod2021`
-        """, 'basic_2021_query')
-
-    data_loader.make_a_query_and_save_to_class("""
-    SELECT *
-    FROM bigquery-public-data.noaa_gsod.stations
-    """, 'stations_query')
-
-    data_loader.save_all_df_to_csv()
-
-
 data_manipulator = DataFrameManipulator()
 
+
+def load_data_with_data_loader_using_query():
+    data_loader.make_a_query_and_save_to_class("SELECT * FROM `bigquery-public-data.noaa_gsod.gsod2020`",
+                                               'basic_2020_query')
+    data_loader.make_a_query_and_save_to_class("SELECT * FROM `bigquery-public-data.noaa_gsod.gsod2021`",
+                                               'basic_2021_query')
+    data_loader.make_a_query_and_save_to_class("SELECT * FROM bigquery-public-data.noaa_gsod.stations",
+                                               'stations_query')
+    data_loader.save_all_df_to_csv()
+
+
 loaded = data_loader.load_dfs_from_csv_to_class()
-print(f'Liczba wczytanych plikow: {loaded}')
 
 if loaded == 0:
-    print('Pobieram dane z serwera (to moze chwile potrwac)...')
+    print('Downloading data from the server (this will only take a moment the first time)...')
     load_data_with_data_loader_using_query()
-    data_loader.save_all_df_to_csv()
-    print('Dane pobrane i zapisane do folderu')
-
 
 main_data_2020 = data_loader.get_df_from_class('basic_2020_query')
 main_data_2021 = data_loader.get_df_from_class('basic_2021_query')
-
 all_main_data = pd.concat([main_data_2021, main_data_2020], ignore_index=True)
 
-data_manipulator.clear_data_frame(
-    all_main_data,
-    None,
-    None,
-    None,
-    ['stn', 'wban', 'date']
-)
 
+data_manipulator.clear_data_frame(all_main_data, None, ['stn', 'wban', 'date'], None, None)
 station_main_data = data_loader.get_df_from_class('stations_query')
+data_manipulator.change_column_names({'usaf':'stn'}, station_main_data)
 
+data_manipulator.clear_data_frame(station_main_data, None, ['stn', 'wban'], None, None)
 
-data_manipulator.change_column_names(
-    {'usaf':'stn'},
-    station_main_data
-)
-
-data_manipulator.clear_data_frame(
-    station_main_data,
-    None,
-    None,
-    None,
-    ['stn', 'wban']
-)
-
-inner_joined_station_and_main = data_manipulator.join_two_dfs(
-    station_main_data,
-    all_main_data,
-    ['stn', 'wban'],
-    'inner'
-)
-
-data_loader.save_df_to_csv(
-    inner_joined_station_and_main,
-    'data/report/inner_joined_station_and_main_dirty.csv'
-)
-
-# ------------- Czesc 1: Wykresy pudelkowe -------------
-
-# wywalamy sztuczne wartosci z bazy NOAA zeby nie psuly nam skali na wykresach
-inner_joined_station_and_main.replace([99.99, 999.9, 9999.9], pd.NA, inplace=True)
-
-# bierzemy probke 50k wierszy zeby nie wywalilo kompa przy rysowaniu tysiecy kropek
-print("Losowanie probki 50tys wierszy do wykresow z Czesci 1...")
-sample_for_plots = inner_joined_station_and_main.dropna(subset=['temp', 'max', 'min', 'prcp', 'visib', 'wdsp', 'slp', 'stp']).sample(n=50000, random_state=42)
-
-# ===========================
-# 1.1 - 1.3 Analiza temperatur
-# ===========================
-fig, ax = plt.subplots(1, 3, figsize=(18, 5))
-
-sample_for_plots.boxplot(
-    ax=ax[0],
-    column='temp',
-    by='year'
-)
-ax[0].set_title('Srednia temperatura na przestrzeni lat')
-ax[0].set_ylabel('Temperatura [F]')
-
-sample_for_plots.boxplot(
-    ax=ax[1],
-    column='max',
-    by='year'
-)
-ax[1].set_title('Maksymalna temperatura')
-ax[1].set_ylabel('Temperatura [F]')
-
-sample_for_plots.boxplot(
-    ax=ax[2],
-    column='min',
-    by='year'
-)
-ax[2].set_title('Minimalna temperatura')
-ax[2].set_ylabel('Temperatura [F]')
-
-plt.suptitle('Analiza temperatur')
-plt.tight_layout()
-plt.show()
-
-# ===========================
-# 1.4 i 1.6 Opady i widzialnosc
-# ===========================
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-sample_for_plots.boxplot(
-    ax=ax[0],
-    column='prcp',
-    by='year'
-)
-ax[0].set_title('Opady atmosferyczne')
-ax[0].set_ylabel('Opady [cale]')
-
-sample_for_plots.boxplot(
-    ax=ax[1],
-    column='visib',
-    by='year'
-)
-ax[1].set_title('Widzialnosc')
-ax[1].set_ylabel('Widzialnosc [mile]')
-
-plt.suptitle('Analiza opadow i widzialnosci')
-plt.tight_layout()
-plt.show()
-
-# ===========================
-# 1.5 Analiza wiatru
-# ===========================
-fig, ax = plt.subplots(1, 3, figsize=(18, 5))
-
-sample_for_plots.boxplot(
-    ax=ax[0],
-    column='wdsp',
-    by='year'
-)
-ax[0].set_title('Srednia predkosc wiatru')
-ax[0].set_ylabel('Predkosc [wezly]')
-
-sample_for_plots.boxplot(
-    ax=ax[1],
-    column='gust',
-    by='year'
-)
-ax[1].set_title('Maksymalne porywy wiatru')
-ax[1].set_ylabel('Predkosc [wezly]')
-
-sample_for_plots.boxplot(
-    ax=ax[2],
-    column='mxpsd',
-    by='year'
-)
-ax[2].set_title('Maksymalny ciagly wiatr')
-ax[2].set_ylabel('Predkosc [wezly]')
-
-plt.suptitle('Analiza wiatru')
-plt.tight_layout()
-plt.show()
-
-# ===========================
-# 1.7 Nasze dodatkowe zmienne (cisnienie)
-# ===========================
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-sample_for_plots.boxplot(
-    ax=ax[0],
-    column='slp',
-    by='year'
-)
-ax[0].set_title('Cisnienie na poziomie morza (SLP)')
-ax[0].set_ylabel('Cisnienie [mbar]')
-
-sample_for_plots.boxplot(
-    ax=ax[1],
-    column='stp',
-    by='year'
-)
-ax[1].set_title('Cisnienie na poziomie stacji (STP)')
-ax[1].set_ylabel('Cisnienie [mbar]')
-
-plt.suptitle('Analiza cisnienia atmosferycznego')
-plt.tight_layout()
-plt.show()
-
+inner_joined_station_and_main = data_manipulator.join_two_dfs(station_main_data, all_main_data, ['stn', 'wban'],
+                                                              'inner')
+inner_joined_station_and_main = data_manipulator.join_two_dfs(station_main_data, all_main_data, ['stn', 'wban'], 'inner')
 
 # ==========================================================
-# Czesc 2: Misja dodatkowa (Identyfikacja outlierow IQR)
+# TRYB TESTOWY - Ograniczenie danych w celu szybkiego testowania
 # ==========================================================
-print("\n--- Czesc 2: Analiza Outlierow metoda IQR ---")
+print("UWAGA: Działa tryb testowy! Zmniejszam bazę do 2 państw...")
 
-# bierzemy opady i wiatr do sprawdzenia
-outlier_vars = ['prcp', 'wdsp']
-
-for col in outlier_vars:
-    # wymuszamy liczby, zeby funkcja liczenia kwartyli sie nie wywalila na stringach
-    numeric_col = pd.to_numeric(inner_joined_station_and_main[col], errors='coerce').dropna()
-
-    # liczymy kwartyle i rozstep (IQR)
-    Q1 = numeric_col.quantile(0.25)
-    Q3 = numeric_col.quantile(0.75)
-    IQR = Q3 - Q1
-
-    # wyznaczamy granice (te tzw. wasy na wykresie)
-    lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-
-    # lapiemy wszystko co wpadlo poza zakres
-    outliers = numeric_col[(numeric_col < lower_bound) | (numeric_col > upper_bound)]
-
-    print(f"Dla zmiennej '{col}': Znaleziono {len(outliers)} wartosci odstajacych (poza zakresem {lower_bound:.2f} do {upper_bound:.2f}).")
-
-
-# ------------- Czesc 3: Obsluga brakow danych -------------
-
-# ===========================
-# 3.1 Zliczanie brakow
-# ===========================
-missing_values_report = data_manipulator.count_missing_values(
-    inner_joined_station_and_main
-)
-
-data_loader.save_df_to_csv(
-    missing_values_report,
-    'data/report/missing_values_report.csv'
-)
-
-# ===========================
-# 3.2 Podmienianie dziwnych placeholderow na prawidlowe pd.NA
-# ===========================
-text_columns_for_main = [
-    'stn', 'wban', 'flag_max', 'flag_min', 'flag_prcp'
-]
-
-date_columns_for_main = [
-    'date'
-]
-
-numeric_columns_for_main = [
-    'year', 'mo', 'da',
-    'temp', 'count_temp',
-    'dewp', 'count_dewp',
-    'slp', 'count_slp',
-    'stp', 'count_stp',
-    'visib', 'count_visib',
-    'wdsp', 'count_wdsp',
-    'mxpsd', 'gust',
-    'max', 'min',
-    'prcp', 'sndp',
-    'fog', 'rain_drizzle', 'snow_ice_pellets',
-    'hail', 'thunder', 'tornado_funnel_cloud'
-]
-
-data_manipulator.clear_data_frame(
-    all_main_data,
-    numeric_columns_for_main,
-    text_columns_for_main,
-    date_columns_for_main,
-    None
-)
-
-text_columns_for_station = [
-    'stn', 'wban', 'name',
-    'country', 'state','call'
-]
-
-date_columns_for_station = [
-    'begin', 'end'
-]
-
-numeric_columns_for_station = [
-    'lat', 'lon', 'elev'
-]
-
-data_manipulator.clear_data_frame(
-    station_main_data,
-    numeric_columns_for_station,
-    text_columns_for_station,
-    date_columns_for_station,
-    None
-)
-
-inner_joined_station_and_main = data_manipulator.join_two_dfs(
-    station_main_data,
-    all_main_data,
-    ['stn', 'wban'],
-    'inner'
-)
-
-data_loader.save_df_to_csv(
-    inner_joined_station_and_main,
-    'data/report/inner_joined_station_and_main_clean.csv'
-)
-
-# ===========================
-# 3.3 Testowanie roznych metod łatania brakow dla cisnienia
-# ===========================
-mean_tryout = inner_joined_station_and_main.copy(True)
-median_tryout = inner_joined_station_and_main.copy(True)
-linear_interpolation_tryout = inner_joined_station_and_main.copy(True)
-
-# 1 metoda: srednia
-mean_stp = round(inner_joined_station_and_main['stp'].mean(), 2)
-mean_slp = round(inner_joined_station_and_main['slp'].mean(), 2)
-
-mean_tryout['stp'] = mean_tryout['stp'].fillna(mean_stp)
-mean_tryout['slp'] = mean_tryout['slp'].fillna(mean_slp)
-
-# 2 metoda: mediana
-median_stp = round(inner_joined_station_and_main['stp'].median(), 2)
-median_slp = round(inner_joined_station_and_main['slp'].median(), 2)
-
-median_tryout['stp'] = median_tryout['stp'].fillna(median_stp)
-median_tryout['slp'] = median_tryout['slp'].fillna(median_slp)
-
-# 3 metoda: interpolacja liniowa (czasowa)
-linear_interpolation_tryout.replace(pd.NA, np.nan, inplace=True)
-
-linear_interpolation_tryout = linear_interpolation_tryout.sort_values('date')
-linear_interpolation_tryout = linear_interpolation_tryout.set_index('date')
-
-linear_interpolation_tryout['stp'] = linear_interpolation_tryout['stp'].interpolate(method='time')
-linear_interpolation_tryout['slp'] = linear_interpolation_tryout['slp'].interpolate(method='time')
-
-linear_interpolation_tryout = linear_interpolation_tryout.reset_index()
-
-# printy zeby porownac ktora metoda najmniej rozwalila nam rozklad
-print('--------------------------------')
-print('Wartosci oryginalne (przed lataniem):\n')
-print(f"stp: \nsrednia: {round(inner_joined_station_and_main['stp'].mean(),2)}\nodchylenie: {round(inner_joined_station_and_main['stp'].std(), 2)}")
-print(f"slp: \nsrednia: {round(inner_joined_station_and_main['slp'].mean(),2)}\nodchylenie: {round(inner_joined_station_and_main['slp'].std(), 2)}")
-print('--------------------------------\n')
-print('Po uzupelnieniu srednia:\n')
-print(f"stp: \nsrednia: {round(mean_tryout['stp'].mean(), 2)}\nodchylenie: {round(mean_tryout['stp'].std(), 2)}")
-print(f"slp: \nsrednia: {round(mean_tryout['slp'].mean(), 2)}\nodchylenie: {round(mean_tryout['slp'].std(), 2)}")
-print('--------------------------------\n')
-print('Po uzupelnieniu mediana:\n')
-print(f"stp: \nsrednia: {round(median_tryout['stp'].mean(), 2)}\nodchylenie: {round(median_tryout['stp'].std(), 2)}")
-print(f"slp: \nsrednia: {round(median_tryout['slp'].mean(), 2)}\nodchylenie: {round(median_tryout['slp'].std(), 2)}")
-print('--------------------------------\n')
-print('Po interpolacji liniowej:\n')
-print(f"stp: \nsrednia: {round(linear_interpolation_tryout['stp'].mean(), 2)}\nodchylenie: {round(linear_interpolation_tryout['stp'].std(), 2)}")
-print(f"slp: \nsrednia: {round(linear_interpolation_tryout['slp'].mean(), 2)}\nodchylenie: {round(linear_interpolation_tryout['slp'].std(), 2)}")
-
-#data_loader.save_df_to_csv(
-#    mean_tryout,
-#    'data/report/mean_tryout.csv'
-#)
-
-#data_loader.save_df_to_csv(
-#    median_tryout,
-#    'data/report/median_tryout.csv'
-#)
-
-data_loader.save_df_to_csv(
-    linear_interpolation_tryout,
-    'data/report/linear_interpolation_tryout.csv'
-)
-
-#  Interpolacja wypada najsensowniej, wiec nadpisujemy glowna tabele jej wynikiem
-inner_joined_station_and_main = linear_interpolation_tryout.copy(True)
-
-
-# ------------- Czesc 4: Obliczenia statystyczne -------------
-
-analysis_df = linear_interpolation_tryout.copy()
-analysis_df['date'] = pd.to_datetime(analysis_df['date'], format='%Y-%m-%d', errors='coerce')
-
-# wybieramy lipiec 2021 jako nasz miesiac testowy
-selected_year = 2021
-selected_month = 7
-
-month_df = analysis_df[
-    (analysis_df['date'].dt.year == selected_year) &
-    (analysis_df['date'].dt.month == selected_month)
+# Zostawiamy w bazie tylko Norwegię i Brazylię (potrzebne do Części 5)
+kraje_testowe = ['NO', 'BR']
+inner_joined_station_and_main = inner_joined_station_and_main[
+    inner_joined_station_and_main['country'].isin(kraje_testowe)
 ].copy()
 
-# lapiemy top 10 państw zeby miec na czym dzialac
-top_10_countries = (
-    month_df['country']
-    .dropna()
-    .value_counts()
-    .head(10)
-    .index
-    .tolist()
-)
+# ==========================================================
+# PRZYGOTOWANIE DANYCH POD SZEREGI CZASOWE
+# ==========================================================
+print("\nPreparing global time aggregates...")
 
-month_df = month_df[month_df['country'].isin(top_10_countries)].copy()
+# Czyszczenie zepsutych danych pogodowych
+inner_joined_station_and_main.replace([99.99, 999.9, 9999.9], pd.NA, inplace=True)
+inner_joined_station_and_main['date'] = pd.to_datetime(inner_joined_station_and_main['date'], format='%Y-%m-%d',
+                                                       errors='coerce')
 
-print("\nTOP 10 wylosowanych krajow do analizy:")
-print(top_10_countries)
+# Globalna srednia pogoda (kompresja do 2 lat)
+daily_weather = inner_joined_station_and_main.groupby('date')[
+    ['temp', 'prcp', 'wdsp', 'slp', 'visib']].mean().reset_index()
+daily_weather = daily_weather.sort_values('date').set_index('date').interpolate(method='time').reset_index()
+daily_weather['day_index'] = np.arange(len(daily_weather))
 
-# ===========================
-# 4.1 Srednie wartosci
-# ===========================
-part_4_1 = (
-    month_df
-    .groupby('country')[['temp', 'prcp', 'wdsp']]
-    .mean()
-    .round(2)
-    .reset_index()
-)
+# Dane rolnicze z pliku CSV
+crop_data = pd.read_csv('data/Production_Crops_Livestock_E_All_Data_NOFLAG.csv', low_memory=False)
+crop_data = crop_data[(crop_data['Element'] == 'Production') & (crop_data['Item'] == 'Barley')]
+year_cols = [col for col in crop_data.columns if col.startswith('Y') and col[1:].isdigit()]
+crop_melted = crop_data.melt(id_vars=['Area'], value_vars=year_cols, var_name='year', value_name='production')
+crop_melted['year'] = crop_melted['year'].str.replace('Y', '').astype(int)
+crop_melted.rename(columns={'Area': 'country_name'}, inplace=True)
 
-print("\n4.1 Srednia temperatura, opady i wiatr:")
-print(part_4_1)
-
-data_loader.save_df_to_csv(
-    part_4_1,
-    'data/report/part_4_1_mean_by_country.csv'
-)
-
-# ===========================
-# 4.2 Zmiany dzienne (diff)
-# ===========================
-month_df = month_df.sort_values(['country', 'date'])
-
-month_df['temp_change'] = month_df.groupby('country')['temp'].diff()
-month_df['prcp_change'] = month_df.groupby('country')['prcp'].diff()
-
-part_4_2 = (
-    month_df
-    .groupby('country')[['temp_change', 'prcp_change']]
-    .mean()
-    .round(2)
-    .reset_index()
-)
-
-print("\n4.2 Srednia zmiana temperatury i opadow z dnia na dzien:")
-print(part_4_2)
-
-data_loader.save_df_to_csv(
-    part_4_2,
-    'data/report/part_4_2_mean_change_by_country.csv'
-)
-
-# ===========================
-# 4.3 Mediany
-# ===========================
-part_4_3 = (
-    month_df
-    .groupby('country')[['temp', 'prcp', 'wdsp']]
-    .median()
-    .round(2)
-    .reset_index()
-)
-
-print("\n4.3 Mediana temperatury, opadow i wiatru:")
-print(part_4_3)
-
-data_loader.save_df_to_csv(
-    part_4_3,
-    'data/report/part_4_3_median_by_country.csv'
-)
-
-# ===========================
-# 4.4 Odchylenie standardowe
-# ===========================
-part_4_4 = (
-    month_df
-    .groupby('country')[['temp', 'prcp', 'wdsp']]
-    .std()
-    .round(2)
-    .reset_index()
-)
-
-print("\n4.4 Odchylenie standardowe:")
-print(part_4_4)
-
-data_loader.save_df_to_csv(
-    part_4_4,
-    'data/report/part_4_4_std_by_country.csv'
-)
-
-# ===========================
-# 4.5 Min, Srednia i Max razem
-# ===========================
-part_4_5 = (
-    month_df
-    .groupby('country')[['temp', 'prcp', 'wdsp']]
-    .agg(['min', 'mean', 'max'])
-    .round(2)
-)
-
-# splaszczamy nazwy kolumn zeby ladnie wygladalo w csv
-part_4_5.columns = [f'{col}_{stat}' for col, stat in part_4_5.columns]
-part_4_5 = part_4_5.reset_index()
-
-print("\n4.5 Wartosci MIN, AVG i MAX dla wybranych parametrow:")
-print(part_4_5)
-
-data_loader.save_df_to_csv(
-    part_4_5,
-    'data/report/part_4_5_min_mean_max_by_country.csv'
-)
-
-# opcjonalnie doliczamy mode
-part_4_mode = (
-    month_df
-    .groupby('country')[['temp', 'prcp', 'wdsp']]
-    .agg(lambda x: x.mode().iloc[0] if not x.mode().empty else pd.NA)
-    .reset_index()
-)
-
-print("\nModa (najczestsza wartosc):")
-print(part_4_mode)
-
-data_loader.save_df_to_csv(
-    part_4_mode,
-    'data/report/part_4_mode_by_country.csv'
-)
+# Globalna produkcja
+yearly_agri = crop_melted.groupby('year')['production'].sum().reset_index()
+yearly_agri['production'] = yearly_agri['production'].interpolate()
 
 # ==========================================================
-# 4.6 Zestawienie pogody z plonami rolniczymi
+# PART 1: Srednia kroczaca (Trendy)
 # ==========================================================
-print("\n4.6 Analiza relacji: Pogoda vs Rolnictwo")
+print("\n--- Part 1: Calculating moving averages ---")
 
-try:
-    # wczytujemy lokalny plik z baza rolnicza z poprzedniego zadania
-    crop_data = pd.read_csv('data/Production_Crops_Livestock_E_All_Data_NOFLAG.csv', low_memory=False)
+variables_weather = ['temp', 'prcp', 'wdsp', 'slp', 'visib']
+for var in variables_weather:
+    daily_weather[f'{var}_roll_mean'] = daily_weather[var].rolling(window=30, center=True).mean()
+    daily_weather[f'{var}_roll_std'] = daily_weather[var].rolling(window=30, center=True).std()
 
-    # zostawiamy tylko rubryke z ostateczna produkcja na badane lata
-    crop_data = crop_data[crop_data['Element'] == 'Production']
-    crop_data = crop_data[['Area', 'Item', 'Y2020', 'Y2021']]
+yearly_agri['prod_roll_mean'] = yearly_agri['production'].rolling(window=5, center=True).mean()
 
-    # odpivotowanie (melt) - zamieniamy lata z kolumn na normalne wiersze
-    crop_melted = crop_data.melt(id_vars=['Area', 'Item'], value_vars=['Y2020', 'Y2021'], var_name='year',
-                                 value_name='production_value')
-    # wywalamy literke Y zeby rok stal sie normalna liczba
-    crop_melted['year'] = crop_melted['year'].str.replace('Y', '').astype(int)
-    crop_melted.rename(columns={'Area': 'country_name', 'Item': 'crop_type'}, inplace=True)
-
-    filtered_weather = inner_joined_station_and_main[
-        inner_joined_station_and_main['year'].isin([2020, 2021])
-    ]
-
-    # wyliczamy srednia temp. caloroczna z bazy pogody, zeby miec z czym to połączyć
-    weather_yearly = filtered_weather.groupby(['country', 'year']).agg(
-        avg_yearly_temp=('temp', 'mean')
-    ).reset_index()
-
-    # slownik tlumaczacy glupie kody krajow z NOAA na prawidlowe nazwy panstw z FAOSTAT
-    country_mapping = {
-        'NO': 'Norway', 'ES': 'El Salvador', 'AF': 'Afghanistan',
-        'US': 'United States of America', 'CA': 'Canada', 'RS': 'Russian Federation',
-        'AS': 'Australia', 'CH': 'China', 'BR': 'Brazil', 'JA': 'Japan',
-        'UK': 'United Kingdom of Great Britain and Northern Ireland',
-        'SW': 'Sweden', 'FR': 'France', 'PL': 'Poland', 'GM': 'Germany'
-    }
-    weather_yearly['country_name'] = weather_yearly['country'].map(country_mapping)
-    weather_yearly.dropna(subset=['country_name'], inplace=True)
-
-    # inner join - zlaczenie dwoch swiatow w calosc
-    crop_weather_df = pd.merge(weather_yearly, crop_melted, on=['country_name', 'year'], how='inner')
-
-    # bierzemy pod lupe Jeczmien
-    selected_crop = 'Barley'
-    selected_year_crop = 2021
-
-    crop_subset = crop_weather_df[
-        (crop_weather_df['year'] == selected_year_crop) &
-        (crop_weather_df['crop_type'] == selected_crop)
-        ].copy()
-
-    if not crop_subset.empty:
-        # lapiemy top 10 najwiekszych producentow tej rosliny
-        top_10_crop_countries = crop_subset.nlargest(10, 'production_value')
-
-        # rysowanie podwojnego wykresu (zeby dalo sie porownac stopnie z tonami na jednym ekranie)
-        fig, ax1 = plt.subplots(figsize=(12, 6))
-        x_indices = np.arange(len(top_10_crop_countries['country_name']))
-
-        # lewa os: slupki z plonami
-        ax1.bar(x_indices, top_10_crop_countries['production_value'], width=0.4, color='forestgreen',
-                label=f'Produkcja {selected_crop}')
-        ax1.set_ylabel('Produkcja (tony)', color='forestgreen', fontsize=12)
-        ax1.set_xticks(x_indices)
-        ax1.set_xticklabels(top_10_crop_countries['country_name'], rotation=45, ha='right')
-
-        # prawa os: linia z temperatura
-        ax2 = ax1.twinx()
-        ax2.plot(x_indices, top_10_crop_countries['avg_yearly_temp'], color='crimson', marker='o',
-                 linestyle='none', linewidth=2, markersize=8, label='Sr. Temp [F]')
-        ax2.set_ylabel('Srednia Temperatura [F]', color='crimson', fontsize=12)
-
-        plt.title(f'Produkcja: Jeczmien a srednia temperatura w {selected_year_crop} roku', fontsize=14,
-                  fontweight='bold')
-        fig.tight_layout()
-        plt.show()
-
-        data_loader.save_df_to_csv(top_10_crop_countries, 'data/report/part_4_6_crop_vs_weather.csv')
-
-    else:
-        print(f"Ups, brak danych dla uprawy {selected_crop}.")
-
-except Exception as e:
-    print(f"Problem przy tworzeniu punktu 4.6: {e}")
-
-
-# ------------- Czesc 5: Normalizacja Danych -------------
-
-normalized_df = analysis_df.copy()
-
-# decydujemy ktore rubryki chcemy splaszczyc do skali 0-1
-columns_to_normalize = [
-    'temp',
-    'prcp',
-    'wdsp',
-    'sndp',
-    'visib',
-    'slp',
-    'stp'
-]
-
-# petla lecąca standardowym algorytmem Min-Max
-for col in columns_to_normalize:
-    col_min = normalized_df[col].min()
-    col_max = normalized_df[col].max()
-
-    if pd.notna(col_min) and pd.notna(col_max) and col_max != col_min:
-        normalized_df[f'{col}_norm'] = (
-            (normalized_df[col] - col_min) / (col_max - col_min)
-        )
-    else:
-        # jak wszedzie jest to samo to dajemy po prostu zero
-        normalized_df[f'{col}_norm'] = 0.0
-
-data_loader.save_df_to_csv(
-    normalized_df,
-    'data/report/normalized_data.csv'
-)
-
-print("Losowanie probki 50 tys wierszy zeby narysowac normalizacje bez zacinania")
-normalized_sample = normalized_df.dropna(subset=['temp', 'prcp', 'wdsp', 'visib', 'slp', 'stp']).sample(n=50000, random_state=42)
-
-# ===========================
-# 5.1 Temperatura przed/po
-# ===========================
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-normalized_sample.boxplot(column='temp', ax=ax[0])
-ax[0].set_title('Temperatura przed normalizacja')
-ax[0].set_ylabel('Temperatura [F]')
-
-normalized_sample.boxplot(column='temp_norm', ax=ax[1])
-ax[1].set_title('Temperatura po normalizacji')
-ax[1].set_ylabel('Wartosc znormalizowana [0 - 1]')
-
-plt.tight_layout()
-plt.show()
-
-# ===========================
-# 5.2 Opady przed/po
-# ===========================
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-normalized_sample.boxplot(column='prcp', ax=ax[0])
-ax[0].set_title('Opady przed normalizacja')
-ax[0].set_ylabel('Opady [cale]')
-
-normalized_sample.boxplot(column='prcp_norm', ax=ax[1])
-ax[1].set_title('Opady po normalizacji')
-ax[1].set_ylabel('Wartosc znormalizowana [0 - 1]')
-
-plt.tight_layout()
-plt.show()
-
-# ===========================
-# 5.3 Wiatr przed/po
-# ===========================
-fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-normalized_sample.boxplot(column='wdsp', ax=ax[0])
-ax[0].set_title('Wiatr przed normalizacja')
-ax[0].set_ylabel('Wiatr [wezly]')
-
-normalized_sample.boxplot(column='wdsp_norm', ax=ax[1])
-ax[1].set_title('Wiatr po normalizacji')
-ax[1].set_ylabel('Wartosc znormalizowana [0 - 1]')
-
-plt.tight_layout()
-plt.show()
-
-# ===========================
-# 5.4 Zmienna rolnicza (plony z pkt 4.6) przed/po
-# ===========================
-if 'crop_subset' in locals() and not crop_subset.empty:
-    prod_min = crop_subset['production_value'].min()
-    prod_max = crop_subset['production_value'].max()
-
-    crop_subset['production_value_norm'] = (crop_subset['production_value'] - prod_min) / (prod_max - prod_min)
-
-    fig, ax = plt.subplots(1, 2, figsize=(12, 5))
-
-    crop_subset.boxplot(column='production_value', ax=ax[0])
-    ax[0].set_title(f'Plony ({selected_crop}) przed normalizacja')
-    ax[0].set_ylabel('Produkcja [tony]')
-
-    crop_subset.boxplot(column='production_value_norm', ax=ax[1])
-    ax[1].set_title('Plony po normalizacji')
-    ax[1].set_ylabel('Wartosc znormalizowana [0 - 1]')
-
-    plt.tight_layout()
-    plt.show()
-
-# ===========================
-# 5.5 Zmienne dodatkowe (skala przed i po scisnieciu w [0-1])
-# ===========================
 fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+ax[0].plot(daily_weather['date'], daily_weather['temp'], alpha=0.3, label='Daily Temp', color='blue')
+ax[0].plot(daily_weather['date'], daily_weather['temp_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
+           color='red')
+ax[0].set_title('Temperature with Moving Average')
+ax[0].legend()
 
-normalized_sample[['visib', 'slp', 'stp']].boxplot(ax=ax[0])
-ax[0].set_title('Dodatkowe zmienne na poczatku (rozstrzelona skala)')
-ax[0].set_ylabel('Oryginalna jednostka')
+ax[1].plot(yearly_agri['year'], yearly_agri['production'], alpha=0.5, marker='o', label='Annual Production',
+           color='green')
+ax[1].plot(yearly_agri['year'], yearly_agri['prod_roll_mean'], linewidth=2, label='5-Year Trend', color='orange')
+ax[1].set_title('Global Barley Production (5-Year Trend)')
+ax[1].legend()
+plt.tight_layout()
+plt.show()
 
-normalized_sample[['visib_norm', 'slp_norm', 'stp_norm']].boxplot(ax=ax[1])
-ax[1].set_title('Te same zmienne po normalizacji')
-ax[1].set_ylabel('Wartosc znormalizowana [0 - 1]')
+# ==========================================================
+# PART 2: Szeregi czasowe
+# ==========================================================
+print("\n--- Part 2: Time Series Analysis (Differencing Method) ---")
+
+daily_weather['temp_diff'] = daily_weather['temp'].diff()
+
+fig, ax = plt.subplots(2, 1, figsize=(12, 8))
+ax[0].plot(daily_weather['date'], daily_weather['temp_roll_mean'], color='red')
+ax[0].set_title('Method 1: Smoothing (30d Moving Average) - Shows TREND and SEASONALITY')
+
+ax[1].plot(daily_weather['date'], daily_weather['temp_diff'], color='purple', alpha=0.7)
+ax[1].set_title('Method 2: Differencing (Day-to-day change) - Shows VARIABILITY (Noise/Peaks)')
+ax[1].axhline(0, color='black', linestyle='--')
+plt.tight_layout()
+plt.show()
+
+# ==========================================================
+# PART 3: Regresja Liniowa
+# ==========================================================
+print("\n--- Part 3: Training Linear Regression Models ---")
+
+
+def plot_linear_regression(df, x_col, y_col, split_val, title, ax):
+    df_clean = df.dropna(subset=[x_col, y_col]).copy()
+
+    # Podział na zbiór Treningowy i Testowy
+    train = df_clean[df_clean[x_col] < split_val]
+    test = df_clean[df_clean[x_col] >= split_val]
+
+    X_train, y_train = train[[x_col]].values, train[y_col].values
+    X_test, y_test = test[[x_col]].values, test[y_col].values
+
+    # Trening modelu
+    model = LinearRegression().fit(X_train, y_train)
+
+    # Predykcja na zbiorze testowym
+    predictions = model.predict(X_test)
+    r2 = r2_score(y_test, predictions)
+
+    # Cała linia regresji do rysowania
+    X_all = df_clean[[x_col]].values
+    y_all_pred = model.predict(X_all)
+
+    ax.scatter(train[x_col], y_train, color='gray', alpha=0.5, label='Training')
+    ax.scatter(test[x_col], y_test, color='blue', alpha=0.5, label='Test (Actual)')
+    ax.plot(X_all, y_all_pred, color='red', linewidth=2, label=f'Linear Regression (R2: {r2:.2f})')
+    ax.set_title(title)
+    ax.legend()
+
+
+fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+
+split_day = 365
+plot_linear_regression(daily_weather, 'day_index', 'temp', split_day, 'Linear Regression: Temperature', axes[0, 0])
+plot_linear_regression(daily_weather, 'day_index', 'prcp', split_day, 'Linear Regression: Precipitation', axes[0, 1])
+plot_linear_regression(daily_weather, 'day_index', 'slp', split_day, 'Linear Regression: Pressure (SLP)', axes[1, 0])
+plot_linear_regression(yearly_agri, 'year', 'production', 2011, 'Linear Regression: Barley Production', axes[1, 1])
 
 plt.tight_layout()
 plt.show()
+
+# ==========================================================
+# PART 4: Regresja Wielomianowa
+# ==========================================================
+print("\n--- Part 4: Polynomial Regression Analysis ---")
+
+
+def get_best_polynomial(df, x_col, y_col, split_val, max_degree=5):
+    df_clean = df.dropna(subset=[x_col, y_col]).copy()
+
+    train = df_clean[df_clean[x_col] < split_val]
+    test = df_clean[df_clean[x_col] >= split_val]
+
+    X_train, y_train = train[[x_col]].values, train[y_col].values
+    X_test, y_test = test[[x_col]].values, test[y_col].values
+
+    best_r2 = -float('inf')
+    best_degree = 1
+    best_model = None
+    best_poly = None
+
+    # szukanie najlepszego stopnia wielomianu
+    for degree in range(1, max_degree + 1):
+        poly = PolynomialFeatures(degree=degree)
+        X_poly_train = poly.fit_transform(X_train)
+        X_poly_test = poly.transform(X_test)
+
+        model = LinearRegression().fit(X_poly_train, y_train)
+        preds = model.predict(X_poly_test)
+        r2 = r2_score(y_test, preds)
+
+        if r2 > best_r2:
+            best_r2 = r2
+            best_degree = degree
+            best_model = model
+            best_poly = poly
+
+    return best_degree, best_model, best_poly, best_r2
+
+
+deg, model, poly, r2 = get_best_polynomial(yearly_agri, 'year', 'production', 2011)
+
+X_all = yearly_agri[['year']].values
+X_poly_all = poly.transform(X_all)
+y_poly_pred = model.predict(X_poly_all)
+
+plt.figure(figsize=(10, 5))
+plt.scatter(yearly_agri['year'], yearly_agri['production'], color='green', alpha=0.6, label='Historical data')
+plt.plot(X_all, y_poly_pred, color='purple', linewidth=3, label=f'Polynomial deg {deg} (R2: {r2:.2f})')
+plt.title(f'Agricultural Production - Best Fit: Polynomial degree {deg}')
+plt.legend()
+plt.show()
+print(f"The best model for agriculture is a polynomial of degree: {deg} with an R2 score: {r2:.2f}")
+
+# ==========================================================
+# PART 5: Porownanie Krajow (Norwegia vs Brazylia)
+# ==========================================================
+print("\n--- Part 5: Country Comparison (Norway North vs Brazil South) ---")
+
+countries_weather = inner_joined_station_and_main[inner_joined_station_and_main['country'].isin(['NO', 'BR'])]
+cw = countries_weather.groupby(['country', 'date'])[['temp']].mean().reset_index()
+cw['date'] = pd.to_datetime(cw['date'])
+cw = cw.dropna()
+
+no_weather = cw[cw['country'] == 'NO'].copy()
+br_weather = cw[cw['country'] == 'BR'].copy()
+no_weather['day_idx'] = np.arange(len(no_weather))
+br_weather['day_idx'] = np.arange(len(br_weather))
+
+model_no = LinearRegression().fit(no_weather[['day_idx']].values, no_weather['temp'].values)
+model_br = LinearRegression().fit(br_weather[['day_idx']].values, br_weather['temp'].values)
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+ax.plot(no_weather['date'], no_weather['temp'], color='blue', alpha=0.3, label='Norway (Raw)')
+ax.plot(no_weather['date'], model_no.predict(no_weather[['day_idx']].values), color='darkblue', linewidth=3,
+        label='Trend: Norway')
+
+ax.plot(br_weather['date'], br_weather['temp'], color='orange', alpha=0.3, label='Brazil (Raw)')
+ax.plot(br_weather['date'], model_br.predict(br_weather[['day_idx']].values), color='red', linewidth=3,
+        label='Trend: Brazil')
+
+plt.title('Climate and Trend Comparison: Northern (NO) vs Southern (BR) Hemisphere')
+plt.ylabel('Temperature [°F]')
+plt.legend()
+plt.show()
+
+print("Analysis completed successfully! All charts generated.")
