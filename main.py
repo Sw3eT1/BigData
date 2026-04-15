@@ -40,28 +40,79 @@ if loaded == 0:
 main_data_2020 = data_loader.get_df_from_class('basic_2020_query')
 main_data_2021 = data_loader.get_df_from_class('basic_2021_query')
 all_main_data = pd.concat([main_data_2021, main_data_2020], ignore_index=True)
-
-
-data_manipulator.clear_data_frame(all_main_data, None, ['stn', 'wban', 'date'], None, None)
 station_main_data = data_loader.get_df_from_class('stations_query')
+
+
+text_columns_for_main = [
+    'stn', 'wban', 'flag_max', 'flag_min', 'flag_prcp'
+]
+
+date_columns_for_main = [
+    'date'
+]
+
+numeric_columns_for_main = [
+    'year', 'mo', 'da',
+    'temp', 'count_temp',
+    'dewp', 'count_dewp',
+    'slp', 'count_slp',
+    'stp', 'count_stp',
+    'visib', 'count_visib',
+    'wdsp', 'count_wdsp',
+    'mxpsd', 'gust',
+    'max', 'min',
+    'prcp', 'sndp',
+    'fog', 'rain_drizzle', 'snow_ice_pellets',
+    'hail', 'thunder', 'tornado_funnel_cloud'
+]
+
+data_manipulator.clear_data_frame(
+    all_main_data,
+    numeric_columns_for_main,
+    text_columns_for_main,
+    date_columns_for_main,
+    None
+)
+
+text_columns_for_station = [
+    'usaf', 'wban', 'name',
+    'country', 'state','call'
+]
+
+date_columns_for_station = [
+    'begin', 'end'
+]
+
+numeric_columns_for_station = [
+    'lat', 'lon', 'elev'
+]
+
+
+data_manipulator.clear_data_frame(
+    station_main_data,
+    numeric_columns_for_station,
+    text_columns_for_station,
+    date_columns_for_station,
+    None
+)
+
+
+
 data_manipulator.change_column_names({'usaf':'stn'}, station_main_data)
 
-data_manipulator.clear_data_frame(station_main_data, None, ['stn', 'wban'], None, None)
 
-inner_joined_station_and_main = data_manipulator.join_two_dfs(station_main_data, all_main_data, ['stn', 'wban'],
-                                                              'inner')
-inner_joined_station_and_main = data_manipulator.join_two_dfs(station_main_data, all_main_data, ['stn', 'wban'], 'inner')
+inner_joined_station_and_main = data_manipulator.join_two_dfs(all_main_data, station_main_data, ['stn', 'wban'],)
 
+# Zostawiamy w bazie tylko Norwegię i Brazylię (potrzebne do Części 5)
+test_countries = ['NO', 'BR']
+country_comparison_data = inner_joined_station_and_main[
+    inner_joined_station_and_main['country'].isin(test_countries)
+].copy()
 
 # ==========================================================
 # PRZYGOTOWANIE DANYCH POD SZEREGI CZASOWE
 # ==========================================================
 print("\nPreparing global time aggregates...")
-
-# Czyszczenie zepsutych danych pogodowych
-inner_joined_station_and_main.replace([99.99, 999.9, 9999.9], pd.NA, inplace=True)
-inner_joined_station_and_main['date'] = pd.to_datetime(inner_joined_station_and_main['date'], format='%Y-%m-%d',
-                                                       errors='coerce')
 
 # Globalna srednia pogoda (kompresja do 2 lat)
 daily_weather = inner_joined_station_and_main.groupby('date')[
@@ -92,34 +143,136 @@ for var in variables_weather:
     daily_weather[f'{var}_roll_std'] = daily_weather[var].rolling(window=30, center=True).std()
 
 yearly_agri['prod_roll_mean'] = yearly_agri['production'].rolling(window=5, center=True).mean()
+yearly_agri['prod_roll_std'] = yearly_agri['production'].rolling(window=5, center=True).std()
 
-fig, ax = plt.subplots(1, 2, figsize=(14, 5))
-ax[0].plot(daily_weather['date'], daily_weather['temp'], alpha=0.3, label='Daily Temp', color='blue')
-ax[0].plot(daily_weather['date'], daily_weather['temp_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
+fig, ax = plt.subplots(3, 2, figsize=(14, 5))
+ax[0][0].plot(daily_weather['date'], daily_weather['temp'], alpha=0.3, label='Daily Temp', color='blue')
+ax[0][0].plot(daily_weather['date'], daily_weather['temp_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
            color='red')
-ax[0].set_title('Temperature with Moving Average')
-ax[0].legend()
+ax[0][0].plot(daily_weather['date'], daily_weather['temp_roll_std'], linewidth=2, label='30-Day Trend (Std)',
+           color='yellow')
+ax[0][0].set_title('Temperature with Moving Average')
+ax[0][0].set_xlabel('Date')
+ax[0][0].set_ylabel('Temperature [F]')
+ax[0][0].legend()
 
-ax[1].plot(yearly_agri['year'], yearly_agri['production'], alpha=0.5, marker='o', label='Annual Production',
+ax[0][1].plot(daily_weather['date'], daily_weather['prcp'], alpha=0.3, label='Daily PRCP', color='blue')
+ax[0][1].plot(daily_weather['date'], daily_weather['prcp_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
+           color='red')
+ax[0][1].plot(daily_weather['date'], daily_weather['prcp_roll_std'], linewidth=2, label='30-Day Trend (Std)',
+           color='yellow')
+
+ax[0][1].set_title('Precipitation with Moving Average')
+ax[0][0].set_xlabel('Date')
+ax[0][0].set_ylabel('Precipitation [XXXXX]')
+ax[0][1].legend()
+
+ax[1][0].plot(daily_weather['date'], daily_weather['wdsp'], alpha=0.3, label='Daily WDSP', color='blue')
+ax[1][0].plot(daily_weather['date'], daily_weather['wdsp_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
+           color='red')
+ax[1][0].plot(daily_weather['date'], daily_weather['wdsp_roll_std'], linewidth=2, label='30-Day Trend (Std)',
+           color='yellow')
+
+ax[1][0].set_title('Wind speed with Moving Average')
+ax[0][0].set_xlabel('Date')
+ax[0][0].set_ylabel('Wind speed [knots]')
+ax[1][0].legend()
+
+ax[1][1].plot(daily_weather['date'], daily_weather['slp'], alpha=0.3, label='Daily slp', color='blue')
+ax[1][1].plot(daily_weather['date'], daily_weather['slp_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
+           color='red')
+ax[1][1].plot(daily_weather['date'], daily_weather['slp_roll_std'], linewidth=2, label='30-Day Trend (Std)',
+           color='yellow')
+
+ax[1][1].set_title('SLP with Moving Average')
+ax[0][0].set_xlabel('Date')
+ax[0][0].set_ylabel('Pressure [Pa]')
+ax[1][1].legend()
+
+
+ax[2][0].plot(daily_weather['date'], daily_weather['visib'], alpha=0.3, label='Daily visib', color='blue')
+ax[2][0].plot(daily_weather['date'], daily_weather['visib_roll_mean'], linewidth=2, label='30-Day Trend (Mean)',
+           color='red')
+ax[2][0].plot(daily_weather['date'], daily_weather['visib_roll_std'], linewidth=2, label='30-Day Trend (Std)',
+           color='yellow')
+
+ax[2][0].set_title('visib with Moving Average')
+ax[0][0].set_xlabel('Date')
+ax[0][0].set_ylabel('Visib [XXXX]')
+ax[2][0].legend()
+
+ax[2][1].plot(yearly_agri['year'], yearly_agri['production'], alpha=0.5, marker='o', label='Annual Production',
            color='green')
-ax[1].plot(yearly_agri['year'], yearly_agri['prod_roll_mean'], linewidth=2, label='5-Year Trend', color='orange')
-ax[1].set_title('Global Barley Production (5-Year Trend)')
-ax[1].legend()
+ax[2][1].plot(yearly_agri['year'], yearly_agri['prod_roll_mean'], linewidth=2, label='5-Year Trend Mean', color='orange',)
+ax[2][1].plot(yearly_agri['year'], yearly_agri['prod_roll_std'], linewidth=2, label='5-Year Trend Std', color='yellow',)
+
+ax[2][1].set_title('Annual production with Moving Average')
+ax[0][0].set_xlabel('Year')
+ax[0][0].set_ylabel('XXXX')
+ax[2][1].legend()
 plt.tight_layout()
 plt.show()
+
 
 # ==========================================================
 # PART 2: Szeregi czasowe
 # ==========================================================
 print("\n--- Part 2: Time Series Analysis (Differencing Method) ---")
 
-daily_weather['temp_diff'] = daily_weather['temp'].diff()
 
-fig, ax = plt.subplots(2, 1, figsize=(12, 8))
+for var in variables_weather:
+    daily_weather[f'{var}_diff'] = daily_weather[f'{var}'].diff()
+
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Temperature')
 ax[0].plot(daily_weather['date'], daily_weather['temp_roll_mean'], color='red')
 ax[0].set_title('Method 1: Smoothing (30d Moving Average) - Shows TREND and SEASONALITY')
 
 ax[1].plot(daily_weather['date'], daily_weather['temp_diff'], color='purple', alpha=0.7)
+ax[1].set_title('Method 2: Differencing (Day-to-day change) - Shows VARIABILITY (Noise/Peaks)')
+ax[1].axhline(0, color='black', linestyle='--')
+plt.tight_layout()
+plt.show()
+
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Precipitation')
+ax[0].plot(daily_weather['date'], daily_weather['prcp_roll_mean'], color='red')
+ax[0].set_title('Method 1: Smoothing (30d Moving Average) - Shows TREND and SEASONALITY')
+
+ax[1].plot(daily_weather['date'], daily_weather['prcp_diff'], color='purple', alpha=0.7)
+ax[1].set_title('Method 2: Differencing (Day-to-day change) - Shows VARIABILITY (Noise/Peaks)')
+ax[1].axhline(0, color='black', linestyle='--')
+plt.tight_layout()
+plt.show()
+
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Wind speed')
+ax[0].plot(daily_weather['date'], daily_weather['wdsp_roll_mean'], color='red')
+ax[0].set_title('Method 1: Smoothing (30d Moving Average) - Shows TREND and SEASONALITY')
+
+ax[1].plot(daily_weather['date'], daily_weather['wdsp_diff'], color='purple', alpha=0.7)
+ax[1].set_title('Method 2: Differencing (Day-to-day change) - Shows VARIABILITY (Noise/Peaks)')
+ax[1].axhline(0, color='black', linestyle='--')
+plt.tight_layout()
+plt.show()
+
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Sea level pressure')
+ax[0].plot(daily_weather['date'], daily_weather['slp_roll_mean'], color='red')
+ax[0].set_title('Method 1: Smoothing (30d Moving Average) - Shows TREND and SEASONALITY')
+
+ax[1].plot(daily_weather['date'], daily_weather['slp_diff'], color='purple', alpha=0.7)
+ax[1].set_title('Method 2: Differencing (Day-to-day change) - Shows VARIABILITY (Noise/Peaks)')
+ax[1].axhline(0, color='black', linestyle='--')
+plt.tight_layout()
+plt.show()
+
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+fig.suptitle('Visibility')
+ax[0].plot(daily_weather['date'], daily_weather['visib_roll_mean'], color='red')
+ax[0].set_title('Method 1: Smoothing (30d Moving Average) - Shows TREND and SEASONALITY')
+
+ax[1].plot(daily_weather['date'], daily_weather['visib_diff'], color='purple', alpha=0.7)
 ax[1].set_title('Method 2: Differencing (Day-to-day change) - Shows VARIABILITY (Noise/Peaks)')
 ax[1].axhline(0, color='black', linestyle='--')
 plt.tight_layout()
