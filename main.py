@@ -285,40 +285,38 @@ print("\n--- Part 3: Training Linear Regression Models ---")
 
 
 def plot_linear_regression(df, x_col, y_col, split_val, title, ax):
-    df_clean = df.dropna(subset=[x_col, y_col]).copy()
-
-    # Podział na zbiór Treningowy i Testowy
-    train = df_clean[df_clean[x_col] < split_val]
-    test = df_clean[df_clean[x_col] >= split_val]
+    train = df[df[x_col] < split_val]
+    test = df[df[x_col] >= split_val]
 
     X_train, y_train = train[[x_col]].values, train[y_col].values
     X_test, y_test = test[[x_col]].values, test[y_col].values
 
-    # Trening modelu
     model = LinearRegression().fit(X_train, y_train)
 
-    # Predykcja na zbiorze testowym
-    predictions = model.predict(X_test)
-    r2 = r2_score(y_test, predictions)
+    train_score = model.score(X_train, y_train)
+    test_score = model.score(X_test, y_test)
 
-    # Cała linia regresji do rysowania
-    X_all = df_clean[[x_col]].values
+    X_all = df[[x_col]].values
     y_all_pred = model.predict(X_all)
 
     ax.scatter(train[x_col], y_train, color='gray', alpha=0.5, label='Training')
     ax.scatter(test[x_col], y_test, color='blue', alpha=0.5, label='Test (Actual)')
-    ax.plot(X_all, y_all_pred, color='red', linewidth=2, label=f'Linear Regression (R2: {r2:.2f})')
+    ax.plot(X_all, y_all_pred, color='red', linewidth=2,
+            label=f'Regression (Train R2: {train_score:.2f}, Test R2: {test_score:.2f})')
+
     ax.set_title(title)
     ax.legend()
 
 
-fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+fig, axes = plt.subplots(3, 2, figsize=(14, 10))
 
 split_day = 365
 plot_linear_regression(daily_weather, 'day_index', 'temp', split_day, 'Linear Regression: Temperature', axes[0, 0])
 plot_linear_regression(daily_weather, 'day_index', 'prcp', split_day, 'Linear Regression: Precipitation', axes[0, 1])
-plot_linear_regression(daily_weather, 'day_index', 'slp', split_day, 'Linear Regression: Pressure (SLP)', axes[1, 0])
-plot_linear_regression(yearly_agri, 'year', 'production', 2011, 'Linear Regression: Barley Production', axes[1, 1])
+plot_linear_regression(daily_weather, 'day_index', 'wdsp', split_day, 'Linear Regression: Wind speed (WDSP)', axes[1, 0])
+plot_linear_regression(daily_weather, 'day_index', 'slp', split_day, 'Linear Regression: Sea level pressure (SLP)', axes[1, 1])
+plot_linear_regression(daily_weather, 'day_index', 'visib', split_day, 'Linear Regression: Visibility', axes[2, 0])
+plot_linear_regression(yearly_agri, 'year', 'production', 2011, 'Linear Regression: Barley Production', axes[2, 1])
 
 plt.tight_layout()
 plt.show()
