@@ -52,16 +52,6 @@ inner_joined_station_and_main = data_manipulator.join_two_dfs(station_main_data,
                                                               'inner')
 inner_joined_station_and_main = data_manipulator.join_two_dfs(station_main_data, all_main_data, ['stn', 'wban'], 'inner')
 
-# ==========================================================
-# TRYB TESTOWY - Ograniczenie danych w celu szybkiego testowania
-# ==========================================================
-print("UWAGA: Działa tryb testowy! Zmniejszam bazę do 2 państw...")
-
-# Zostawiamy w bazie tylko Norwegię i Brazylię (potrzebne do Części 5)
-kraje_testowe = ['NO', 'BR']
-inner_joined_station_and_main = inner_joined_station_and_main[
-    inner_joined_station_and_main['country'].isin(kraje_testowe)
-].copy()
 
 # ==========================================================
 # PRZYGOTOWANIE DANYCH POD SZEREGI CZASOWE
