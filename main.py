@@ -326,8 +326,7 @@ plt.show()
 # ==========================================================
 print("\n--- Part 4: Polynomial Regression Analysis ---")
 
-
-def get_best_polynomial(df, x_col, y_col, split_val, max_degree=5):
+def plot_polynomial_regression(df, x_col, y_col, split_val, title, ax, max_degree=15):
     df_clean = df.dropna(subset=[x_col, y_col]).copy()
 
     train = df_clean[df_clean[x_col] < split_val]
@@ -341,7 +340,6 @@ def get_best_polynomial(df, x_col, y_col, split_val, max_degree=5):
     best_model = None
     best_poly = None
 
-    # szukanie najlepszego stopnia wielomianu
     for degree in range(1, max_degree + 1):
         poly = PolynomialFeatures(degree=degree)
         X_poly_train = poly.fit_transform(X_train)
@@ -349,6 +347,7 @@ def get_best_polynomial(df, x_col, y_col, split_val, max_degree=5):
 
         model = LinearRegression().fit(X_poly_train, y_train)
         preds = model.predict(X_poly_test)
+
         r2 = r2_score(y_test, preds)
 
         if r2 > best_r2:
@@ -357,22 +356,33 @@ def get_best_polynomial(df, x_col, y_col, split_val, max_degree=5):
             best_model = model
             best_poly = poly
 
-    return best_degree, best_model, best_poly, best_r2
+    X_all = df_clean[[x_col]].values
+    X_poly_all = best_poly.transform(X_all)
+    y_all_pred = best_model.predict(X_poly_all)
 
+    train_r2 = best_model.score(best_poly.transform(X_train), y_train)
 
-deg, model, poly, r2 = get_best_polynomial(yearly_agri, 'year', 'production', 2011)
+    ax.scatter(train[x_col], y_train, color='gray', alpha=0.5, label='Training')
+    ax.scatter(test[x_col], y_test, color='blue', alpha=0.5, label='Test (Actual)')
+    ax.plot(X_all, y_all_pred, color='purple', linewidth=2,
+            label=f'Poly deg {best_degree} (Train R2: {train_r2:.2f}, Test R2: {best_r2:.2f})')
 
-X_all = yearly_agri[['year']].values
-X_poly_all = poly.transform(X_all)
-y_poly_pred = model.predict(X_poly_all)
+    ax.set_title(title)
+    ax.legend()
 
-plt.figure(figsize=(10, 5))
-plt.scatter(yearly_agri['year'], yearly_agri['production'], color='green', alpha=0.6, label='Historical data')
-plt.plot(X_all, y_poly_pred, color='purple', linewidth=3, label=f'Polynomial deg {deg} (R2: {r2:.2f})')
-plt.title(f'Agricultural Production - Best Fit: Polynomial degree {deg}')
-plt.legend()
+fig, axes = plt.subplots(3, 2, figsize=(14, 10))
+
+split_day = 365
+
+plot_polynomial_regression(daily_weather, 'day_index', 'temp', split_day, 'Polynomial: Temperature', axes[0, 0])
+plot_polynomial_regression(daily_weather, 'day_index', 'prcp', split_day, 'Polynomial: Precipitation', axes[0, 1])
+plot_polynomial_regression(daily_weather, 'day_index', 'wdsp', split_day, 'Polynomial: Wind speed', axes[1, 0])
+plot_polynomial_regression(daily_weather, 'day_index', 'slp', split_day, 'Polynomial: Sea level pressure', axes[1, 1])
+plot_polynomial_regression(daily_weather, 'day_index', 'visib', split_day, 'Polynomial: Visibility', axes[2, 0])
+plot_polynomial_regression(yearly_agri, 'year', 'production', 2011, 'Polynomial: Barley Production', axes[2, 1])
+
+plt.tight_layout()
 plt.show()
-print(f"The best model for agriculture is a polynomial of degree: {deg} with an R2 score: {r2:.2f}")
 
 # ==========================================================
 # PART 5: Porownanie Krajow (Norwegia vs Brazylia)
