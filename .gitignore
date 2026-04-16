@@ -2,3 +2,4 @@
 *.csv
 venv/
 *lustrous*.json
+.idea/workspace.xml

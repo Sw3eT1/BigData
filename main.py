@@ -66,12 +66,16 @@ numeric_columns_for_main = [
     'hail', 'thunder', 'tornado_funnel_cloud'
 ]
 
+duplicate_columns_for_main = [
+    'stn', 'wban', 'date'
+]
+
 data_manipulator.clear_data_frame(
     all_main_data,
     numeric_columns_for_main,
     text_columns_for_main,
     date_columns_for_main,
-    None
+    duplicate_columns_for_main
 )
 
 text_columns_for_station = [
@@ -88,14 +92,17 @@ numeric_columns_for_station = [
 ]
 
 
+duplicate_columns_for_station = [
+    'usaf', 'wban'
+]
+
 data_manipulator.clear_data_frame(
     station_main_data,
     numeric_columns_for_station,
     text_columns_for_station,
     date_columns_for_station,
-    None
+    duplicate_columns_for_main
 )
-
 
 
 data_manipulator.change_column_names({'usaf':'stn'}, station_main_data)
@@ -163,8 +170,8 @@ ax[0][1].plot(daily_weather['date'], daily_weather['prcp_roll_std'], linewidth=2
            color='yellow')
 
 ax[0][1].set_title('Precipitation with Moving Average')
-ax[0][0].set_xlabel('Date')
-ax[0][0].set_ylabel('Precipitation [XXXXX]')
+ax[0][1].set_xlabel('Date')
+ax[0][1].set_ylabel('Precipitation [inches]')
 ax[0][1].legend()
 
 ax[1][0].plot(daily_weather['date'], daily_weather['wdsp'], alpha=0.3, label='Daily WDSP', color='blue')
@@ -174,8 +181,8 @@ ax[1][0].plot(daily_weather['date'], daily_weather['wdsp_roll_std'], linewidth=2
            color='yellow')
 
 ax[1][0].set_title('Wind speed with Moving Average')
-ax[0][0].set_xlabel('Date')
-ax[0][0].set_ylabel('Wind speed [knots]')
+ax[1][0].set_xlabel('Date')
+ax[1][0].set_ylabel('Wind speed [knots]')
 ax[1][0].legend()
 
 ax[1][1].plot(daily_weather['date'], daily_weather['slp'], alpha=0.3, label='Daily slp', color='blue')
@@ -185,8 +192,8 @@ ax[1][1].plot(daily_weather['date'], daily_weather['slp_roll_std'], linewidth=2,
            color='yellow')
 
 ax[1][1].set_title('SLP with Moving Average')
-ax[0][0].set_xlabel('Date')
-ax[0][0].set_ylabel('Pressure [Pa]')
+ax[1][1].set_xlabel('Date')
+ax[1][1].set_ylabel('Pressure [Pa]')
 ax[1][1].legend()
 
 
@@ -197,8 +204,8 @@ ax[2][0].plot(daily_weather['date'], daily_weather['visib_roll_std'], linewidth=
            color='yellow')
 
 ax[2][0].set_title('visib with Moving Average')
-ax[0][0].set_xlabel('Date')
-ax[0][0].set_ylabel('Visib [XXXX]')
+ax[2][0].set_xlabel('Date')
+ax[2][0].set_ylabel('Visib [miles]')
 ax[2][0].legend()
 
 ax[2][1].plot(yearly_agri['year'], yearly_agri['production'], alpha=0.5, marker='o', label='Annual Production',
@@ -207,8 +214,8 @@ ax[2][1].plot(yearly_agri['year'], yearly_agri['prod_roll_mean'], linewidth=2, l
 ax[2][1].plot(yearly_agri['year'], yearly_agri['prod_roll_std'], linewidth=2, label='5-Year Trend Std', color='yellow',)
 
 ax[2][1].set_title('Annual production with Moving Average')
-ax[0][0].set_xlabel('Year')
-ax[0][0].set_ylabel('XXXX')
+ax[2][1].set_xlabel('Year')
+ax[2][1].set_ylabel('tonnes')
 ax[2][1].legend()
 plt.tight_layout()
 plt.show()
@@ -389,32 +396,106 @@ plt.show()
 # ==========================================================
 print("\n--- Part 5: Country Comparison (Norway North vs Brazil South) ---")
 
+# 1. Filtrujemy główne tabele od razu dla Norwegii i Brazylii
 countries_weather = inner_joined_station_and_main[inner_joined_station_and_main['country'].isin(['NO', 'BR'])]
-cw = countries_weather.groupby(['country', 'date'])[['temp']].mean().reset_index()
-cw['date'] = pd.to_datetime(cw['date'])
-cw = cw.dropna()
 
-no_weather = cw[cw['country'] == 'NO'].copy()
-br_weather = cw[cw['country'] == 'BR'].copy()
-no_weather['day_idx'] = np.arange(len(no_weather))
-br_weather['day_idx'] = np.arange(len(br_weather))
+# Zmieniamy nazwy państw w rolnictwie na kody, żeby pasowały do pogody (NO, BR)
+countries_agri = crop_melted[crop_melted['country_name'].isin(['Norway', 'Brazil'])].copy()
+# Tłumaczymy 'Norway' na 'NO', a 'Brazil' na 'BR' dla wygody
+countries_agri['country'] = countries_agri['country_name'].map({'Norway': 'NO', 'Brazil': 'BR'})
 
-model_no = LinearRegression().fit(no_weather[['day_idx']].values, no_weather['temp'].values)
-model_br = LinearRegression().fit(br_weather[['day_idx']].values, br_weather['temp'].values)
+# 2. MEGA-SŁOWNIK KONFIGURACYJNY
+values_used = {
+    'temp': {
+        'df': countries_weather,
+        'time_col': 'date',  # Mówimy pętli, jaka kolumna trzyma czas
+        'title': 'Temperature',
+        'ylabel': 'Temperature [°F]',
+        'xlabel': 'Date'
+    },
+    'prcp': {
+        'df': countries_weather,
+        'time_col': 'date',
+        'title': 'Precipitation',
+        'ylabel': 'Precipitation [inches]',
+        'xlabel': 'Date'
+    },
+    'wdsp': {
+        'df': countries_weather,
+        'time_col': 'date',
+        'title': 'Wind Speed',
+        'ylabel': 'Wind speed [knots]',
+        'xlabel': 'Date'
+    },
+    'slp': {
+        'df': countries_weather,
+        'time_col': 'date',
+        'title': 'Sea Level Pressure',
+        'ylabel': 'Sea level pressure [mbar]',
+        'xlabel': 'Date'
+    },
+    'visib': {
+        'df': countries_weather,
+        'time_col': 'date',
+        'title': 'Visibility',
+        'ylabel': 'Visibility [miles]',
+        'xlabel': 'Date'
+    },
+    'production': {
+        'df': countries_agri,
+        'time_col': 'year',
+        'title': 'Barley Production',
+        'ylabel': 'Barley [tonnes]',
+        'xlabel': 'Year'
+    }
+}
 
-fig, ax = plt.subplots(figsize=(12, 6))
+# 3. UNIWERSALNA PĘTLA
+for var, config in values_used.items():
+    print(f"Rysowanie wykresu dla: {config['title']}...")
 
-ax.plot(no_weather['date'], no_weather['temp'], color='blue', alpha=0.3, label='Norway (Raw)')
-ax.plot(no_weather['date'], model_no.predict(no_weather[['day_idx']].values), color='darkblue', linewidth=3,
-        label='Trend: Norway')
+    # Wyciągamy odpowiedni DataFrame i kolumnę czasu z naszej konfiguracji
+    current_df = config['df']
+    time_col = config['time_col']
 
-ax.plot(br_weather['date'], br_weather['temp'], color='orange', alpha=0.3, label='Brazil (Raw)')
-ax.plot(br_weather['date'], model_br.predict(br_weather[['day_idx']].values), color='red', linewidth=3,
-        label='Trend: Brazil')
+    # Grupujemy po kraju i po odpowiednim czasie (data lub rok)
+    cw = current_df.groupby(['country', time_col])[[var]].mean().reset_index()
+    cw = cw.dropna()
 
-plt.title('Climate and Trend Comparison: Northern (NO) vs Southern (BR) Hemisphere')
-plt.ylabel('Temperature [°F]')
-plt.legend()
-plt.show()
+    # Jeśli to data kalendarzowa, upewnijmy się, że ma odpowiedni typ
+    if time_col == 'date':
+        cw['date'] = pd.to_datetime(cw['date'])
+
+    # Dzielimy na kraje
+    no_data = cw[cw['country'] == 'NO'].copy()
+    br_data = cw[cw['country'] == 'BR'].copy()
+
+    # Tworzymy wektory indeksów dla regresji liniowej
+    no_data['day_idx'] = np.arange(len(no_data))
+    br_data['day_idx'] = np.arange(len(br_data))
+
+    # Trenujemy modele tylko jeśli mamy w ogóle jakieś dane (zabezpieczenie przed pustym wykresem)
+    if not no_data.empty and not br_data.empty:
+        model_no = LinearRegression().fit(no_data[['day_idx']].values, no_data[var].values)
+        model_br = LinearRegression().fit(br_data[['day_idx']].values, br_data[var].values)
+
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Rysujemy Norwegię
+        ax.plot(no_data[time_col], no_data[var], color='blue', alpha=0.3, label='Norway (Raw)')
+        ax.plot(no_data[time_col], model_no.predict(no_data[['day_idx']].values), color='darkblue', linewidth=3,
+                label='Trend: Norway')
+
+        # Rysujemy Brazylię
+        ax.plot(br_data[time_col], br_data[var], color='orange', alpha=0.3, label='Brazil (Raw)')
+        ax.plot(br_data[time_col], model_br.predict(br_data[['day_idx']].values), color='red', linewidth=3,
+                label='Trend: Brazil')
+
+        # Wyciągamy ładne napisy ze słownika
+        plt.title(f"{config['title']} Trend: Northern (NO) vs Southern (BR) Hemisphere")
+        plt.ylabel(config['ylabel'])
+        plt.xlabel(config['xlabel'])
+        plt.legend()
+        plt.show()
 
 print("Analysis completed successfully! All charts generated.")
